@@ -1,54 +1,52 @@
 # TFM Android
 
-Cliente Android (Kotlin + Jetpack Compose, Material 3) para
-**TelegramFileManager**: gestiona los ficheros que guardas en canales de
-Telegram a través de la API REST v1 + SignalR del servidor.
+Android client (Kotlin + Jetpack Compose, Material 3) for
+**TelegramFileManager**: manage the files you store in Telegram channels
+through the server's REST API v1 + SignalR hub.
 
-## Funcionalidades
+## Features
 
-- **Primer arranque guiado**: configuración de URL del servidor y API key, con
-  verificación de conexión antes de guardar.
-- **Login de Telegram** (sesión compartida del servidor): por **QR** (con
-  deep-link `tg://login` si Telegram está en el mismo dispositivo, y soporte de
-  2FA) o por **teléfono** (código + contraseña 2FA).
-- **Canales**: guardados / todos / favoritos, búsqueda, detalles con estadísticas,
-  crear canal, unirse por invitación, crear/actualizar índice, mensajes recientes
-  con descarga directa de adjuntos, salir del canal.
-- **Explorador de ficheros del canal**: navegación con breadcrumbs, filtros por
-  tipo, ordenación, búsqueda recursiva, multi-selección, crear carpeta, renombrar,
-  copiar/mover, eliminar, **subir ficheros desde el dispositivo** y descargar
-  **al servidor** (transfer gestionado) o **al dispositivo** (DownloadManager,
-  carpeta `Download/TFM`).
-- **Ficheros locales del servidor**: navegación, filtros, subir desde el
-  dispositivo, **enviar a un canal de Telegram** (sin duplicar bytes), renombrar,
-  eliminar, vaciar caché de streaming.
-- **Transferencias en tiempo real**: hub SignalR `/hubs/transfers` con
-  reconexión automática — velocidad, progreso, colas; pausar/reanudar/detener
-  globales y pausar/cancelar/reintentar por elemento; badge con actividad en la
-  barra inferior.
-- **Reproductor de audio** en segundo plano (Media3 + MediaSession: notificación,
-  auriculares, cola, aleatorio, repetición) con mini-player persistente.
-- **Playlists** del servidor: crear, borrar, reordenar, añadir pistas desde el
-  explorador, reproducir completas (resolución de URLs en paralelo) y descargar
-  al servidor.
-- **Streaming de vídeo** (ExoPlayer, pantalla completa) tanto de ficheros de
-  Telegram como locales del servidor.
-- **Ajustes**: info del servidor, cuenta de Telegram (logout), y configuración
-  del servidor (descargas simultáneas, chunks paralelos, conexiones por
-  descarga, hash).
+- **Guided first run**: server URL and API key setup, with a connection check
+  before saving.
+- **Telegram login** (server-side shared session): via **QR** (with
+  `tg://login` deep link when Telegram is on the same device, and 2FA support)
+  or via **phone** (code + 2FA password).
+- **Channels**: saved / all / favorites, search, details with statistics,
+  create channel, join by invitation, create/refresh index, recent messages
+  with direct attachment download, leave channel.
+- **Channel file browser**: breadcrumb navigation, type filters, sorting,
+  recursive search, multi-select, create folder, rename, copy/move, delete,
+  **upload files from the device** and download **to the server** (managed
+  transfer) or **to the device** (DownloadManager, `Download/TFM` folder).
+- **Server local storage**: browsing, filters, upload from the device,
+  **send to a Telegram channel** (without duplicating bytes), rename, delete,
+  clear the streaming cache.
+- **Real-time transfers**: SignalR hub `/hubs/transfers` with automatic
+  reconnection — speed, progress, queues; global pause/resume/stop and
+  per-item pause/cancel/retry; activity badge in the bottom bar.
+- **Background audio player** (Media3 + MediaSession: notification, headset
+  support, queue, shuffle, repeat) with a persistent mini player.
+- **Server playlists**: create, delete, reorder, add tracks from the file
+  browser, play whole playlists (URLs resolved in parallel) and download them
+  to the server.
+- **Video streaming** (ExoPlayer, fullscreen) for both Telegram-hosted and
+  server-local files.
+- **Settings**: server info, Telegram account (logout), and server
+  configuration (simultaneous downloads, parallel chunks, connections per
+  download, hashing).
 
-## Rendimiento
+## Performance
 
-- Las llamadas independientes se lanzan **en paralelo** (`async`/`awaitAll`),
-  p. ej. info + usuario + config en Ajustes, o la resolución de pistas de una
-  playlist (con límite de concurrencia).
-- El progreso de transferencias llega por **push** (SignalR) en vez de polling.
-- Estados de carga con spinner en todas las pantallas y sin bloqueos del hilo
-  principal (todo IO va por corrutinas).
+- Independent calls run **in parallel** (`async`/`awaitAll`), e.g. info +
+  user + config in Settings, or resolving playlist track URLs (with bounded
+  concurrency).
+- Transfer progress arrives via **push** (SignalR) instead of polling.
+- Loading spinners on every screen and no main-thread blocking (all IO runs
+  on coroutines).
 
-## Compilar
+## Build
 
-Requisitos: JDK 17+ y Android SDK 35.
+Requirements: JDK 17+ and Android SDK 35.
 
 ```bash
 ./gradlew assembleDebug
@@ -56,17 +54,17 @@ Requisitos: JDK 17+ y Android SDK 35.
 
 ## Release (CI)
 
-`.github/workflows/release.yml` compila y firma el APK en cada push a `main` y
-publica una GitHub Release `v<versionName>`.
+`.github/workflows/release.yml` builds and signs the APK on every push to
+`main` and publishes a GitHub Release `v<versionName>`.
 
-Secrets del repositorio:
+Repository secrets:
 
-| Secret | Descripción |
+| Secret | Description |
 | --- | --- |
-| `KEYSTORE_BASE64` | Keystore `.jks` en base64. |
-| `KEYSTORE_PASSWORD` | Contraseña del keystore. |
-| `KEY_PASSWORD` | Contraseña de la clave. |
-| `KEY_ALIAS` | (Opcional) alias de la clave; por defecto `tfm`. |
+| `KEYSTORE_BASE64` | Base64-encoded `.jks` keystore. |
+| `KEYSTORE_PASSWORD` | Keystore password. |
+| `KEY_PASSWORD` | Key password. |
+| `KEY_ALIAS` | (Optional) key alias; defaults to `tfm`. |
 
-Para subir versión: edita `versionCode` / `versionName` en
+To bump the version: edit `versionCode` / `versionName` in
 `app/build.gradle.kts`.
