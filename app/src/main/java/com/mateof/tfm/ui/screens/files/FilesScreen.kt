@@ -1,0 +1,503 @@
+package com.mateof.tfm.ui.screens.files
+
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.PlaylistAdd
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Sort
+import androidx.compose.material.icons.outlined.UploadFile
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
+import com.mateof.tfm.core.Format
+import com.mateof.tfm.data.model.ApiFileDto
+import com.mateof.tfm.ui.components.ConfirmDialog
+import com.mateof.tfm.ui.components.EmptyState
+import com.mateof.tfm.ui.components.ErrorState
+import com.mateof.tfm.ui.components.FileRow
+import com.mateof.tfm.ui.components.FullScreenSpinnerOverlay
+import com.mateof.tfm.ui.components.InputDialog
+import com.mateof.tfm.ui.components.LoadingBox
+import com.mateof.tfm.ui.nav.Routes
+
+private val FILTERS = listOf(
+    "all" to "Todo",
+    "audio" to "Audio",
+    "video" to "Vídeo",
+    "photo" to "Fotos",
+    "document" to "Docs",
+    "archive" to "Archivos"
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewModel()) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    var actionsFor by remember { mutableStateOf<ApiFileDto?>(null) }
+    var renameFor by remember { mutableStateOf<ApiFileDto?>(null) }
+    var deleteFor by remember { mutableStateOf<List<String>?>(null) }
+    var copyMoveFor by remember { mutableStateOf<Pair<List<String>, Boolean>?>(null) }
+    var playlistFor by remember { mutableStateOf<ApiFileDto?>(null) }
+    var showCreateFolder by rememberSaveable { mutableStateOf(false) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var showSort by remember { mutableStateOf(false) }
+
+    val pickFiles = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris -> vm.uploadFromDevice(uris) }
+
+    LaunchedEffect(state.snackbar) {
+        state.snackbar?.let {
+            snackbarHostState.showSnackbar(it)
+            vm.snackbarShown()
+        }
+    }
+
+    BackHandler(enabled = state.selection.isNotEmpty()) { vm.clearSelection() }
+    BackHandler(enabled = state.selection.isEmpty()) {
+        if (!vm.navigateUp()) navController.popBackStack()
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            if (state.selection.isNotEmpty()) {
+                TopAppBar(
+                    title = { Text("${state.selection.size} seleccionados") },
+                    navigationIcon = {
+                        IconButton(onClick = vm::clearSelection) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancelar selección")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { vm.downloadSelectionToServer() }) {
+                            Icon(Icons.Outlined.CloudDownload, "Descargar al servidor")
+                        }
+                        IconButton(onClick = { vm.downloadSelectionToDevice() }) {
+                            Icon(Icons.Outlined.Download, "Descargar al dispositivo")
+                        }
+                        IconButton(onClick = {
+                            copyMoveFor = state.selection.toList() to false
+                        }) {
+                            Icon(Icons.Outlined.ContentCopy, "Copiar")
+                        }
+                        IconButton(onClick = {
+                            copyMoveFor = state.selection.toList() to true
+                        }) {
+                            Icon(Icons.Outlined.DriveFileMove, "Mover")
+                        }
+                        IconButton(onClick = { deleteFor = state.selection.toList() }) {
+                            Icon(Icons.Outlined.Delete, "Eliminar")
+                        }
+                    }
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                state.channelName.ifBlank { "Ficheros" },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                state.contents?.currentPath ?: vm.path,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (!vm.navigateUp()) navController.popBackStack()
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showSearch = !showSearch }) {
+                            Icon(Icons.Outlined.Search, "Buscar")
+                        }
+                        IconButton(onClick = { showSort = true }) {
+                            Icon(Icons.Outlined.Sort, "Ordenar")
+                        }
+                        SortMenu(
+                            expanded = showSort,
+                            onDismiss = { showSort = false },
+                            current = state.sortBy,
+                            descending = state.sortDescending,
+                            onPick = { by, desc -> vm.setSort(by, desc) }
+                        )
+                        IconButton(onClick = { showCreateFolder = true }) {
+                            Icon(Icons.Outlined.CreateNewFolder, "Nueva carpeta")
+                        }
+                    }
+                )
+            }
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { pickFiles.launch("*/*") }) {
+                Icon(Icons.Outlined.UploadFile, "Subir fichero")
+            }
+        }
+    ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+
+            if (showSearch) {
+                OutlinedTextField(
+                    value = state.search,
+                    onValueChange = vm::setSearch,
+                    placeholder = { Text("Buscar en esta carpeta y subcarpetas…") },
+                    singleLine = true,
+                    trailingIcon = {
+                        TextButton(onClick = vm::submitSearch) { Text("Buscar") }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                FILTERS.forEach { (value, label) ->
+                    FilterChip(
+                        selected = state.filter == value,
+                        onClick = { vm.setFilter(value) },
+                        label = { Text(label) },
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+            }
+
+            // Breadcrumbs
+            val crumbs = state.contents?.breadcrumbs.orEmpty()
+            if (crumbs.isNotEmpty() && !state.searchMode) {
+                Row(
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                ) {
+                    crumbs.forEachIndexed { i, crumb ->
+                        Text(
+                            text = crumb.name,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (i == crumbs.lastIndex) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (i == crumbs.lastIndex) FontWeight.Bold else null,
+                            modifier = Modifier.clickable { vm.navigateTo(crumb.path) }
+                        )
+                        if (i != crumbs.lastIndex) {
+                            Text(
+                                "  ›  ",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            when {
+                state.loading -> LoadingBox(label = "Cargando ficheros…")
+                state.error != null -> ErrorState(state.error!!, onRetry = { vm.load() })
+                state.items.isEmpty() -> EmptyState("Carpeta vacía")
+                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    itemsIndexed(state.items, key = { _, f -> f.id }) { _, file ->
+                        FileRow(
+                            file = file,
+                            subtitle = buildString {
+                                if (file.isFile) {
+                                    append(file.sizeText ?: Format.bytes(file.size))
+                                    file.type?.let { append("  ·  ").append(it) }
+                                } else {
+                                    append("Carpeta")
+                                }
+                            },
+                            selected = file.id in state.selection,
+                            onClick = {
+                                when {
+                                    state.selection.isNotEmpty() -> vm.toggleSelection(file)
+                                    !file.isFile -> vm.navigateTo(
+                                        file.path?.plus(file.name)?.plus("/")
+                                            ?: (vm.path + file.name + "/")
+                                    )
+                                    else -> when (val action = vm.play(file)) {
+                                        is PlayAction.OpenVideo -> navController.navigate(
+                                            Routes.video(action.url, action.title)
+                                        )
+                                        PlayAction.AudioStarted -> Unit
+                                        PlayAction.None -> actionsFor = file
+                                    }
+                                }
+                            },
+                            onLongClick = { vm.toggleSelection(file) },
+                            trailing = {
+                                IconButton(onClick = { actionsFor = file }) {
+                                    Icon(Icons.Filled.MoreVert, "Acciones")
+                                }
+                            }
+                        )
+                    }
+                    if (state.hasNext) {
+                        item {
+                            TextButton(
+                                onClick = { vm.load(more = true) },
+                                enabled = !state.loadingMore,
+                                modifier = Modifier.fillMaxWidth().padding(8.dp)
+                            ) {
+                                Text(if (state.loadingMore) "Cargando…" else "Cargar más")
+                            }
+                        }
+                    }
+                    item { Spacer(Modifier.height(88.dp)) }
+                }
+            }
+        }
+    }
+
+    FullScreenSpinnerOverlay(visible = state.busy)
+
+    // ---------------------------------------------------------- action sheet
+    actionsFor?.let { file ->
+        ModalBottomSheet(onDismissRequest = { actionsFor = null }) {
+            Text(
+                file.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+            )
+            HorizontalDivider()
+            if (file.isFile && file.category.equals("audio", true)) {
+                ListItem(
+                    headlineContent = { Text("Reproducir") },
+                    leadingContent = { Icon(Icons.Outlined.PlayArrow, null) },
+                    modifier = Modifier.clickable { vm.play(file); actionsFor = null }
+                )
+                ListItem(
+                    headlineContent = { Text("Añadir a playlist") },
+                    leadingContent = { Icon(Icons.Outlined.PlaylistAdd, null) },
+                    modifier = Modifier.clickable {
+                        vm.loadPlaylists(); playlistFor = file; actionsFor = null
+                    }
+                )
+            }
+            ListItem(
+                headlineContent = { Text("Descargar al servidor") },
+                leadingContent = { Icon(Icons.Outlined.CloudDownload, null) },
+                modifier = Modifier.clickable {
+                    vm.downloadToServer(listOf(file.id)); actionsFor = null
+                }
+            )
+            if (file.isFile) {
+                ListItem(
+                    headlineContent = { Text("Descargar al dispositivo") },
+                    leadingContent = { Icon(Icons.Outlined.Download, null) },
+                    modifier = Modifier.clickable {
+                        vm.downloadToDevice(file); actionsFor = null
+                    }
+                )
+            }
+            ListItem(
+                headlineContent = { Text("Renombrar") },
+                leadingContent = { Icon(Icons.Outlined.Edit, null) },
+                modifier = Modifier.clickable { renameFor = file; actionsFor = null }
+            )
+            ListItem(
+                headlineContent = { Text("Copiar a…") },
+                leadingContent = { Icon(Icons.Outlined.ContentCopy, null) },
+                modifier = Modifier.clickable {
+                    copyMoveFor = listOf(file.id) to false; actionsFor = null
+                }
+            )
+            ListItem(
+                headlineContent = { Text("Mover a…") },
+                leadingContent = { Icon(Icons.Outlined.DriveFileMove, null) },
+                modifier = Modifier.clickable {
+                    copyMoveFor = listOf(file.id) to true; actionsFor = null
+                }
+            )
+            ListItem(
+                headlineContent = { Text("Eliminar", color = MaterialTheme.colorScheme.error) },
+                leadingContent = {
+                    Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
+                },
+                modifier = Modifier.clickable {
+                    deleteFor = listOf(file.id); actionsFor = null
+                }
+            )
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    // --------------------------------------------------------------- dialogs
+    renameFor?.let { file ->
+        InputDialog(
+            title = "Renombrar",
+            label = "Nuevo nombre",
+            initialValue = file.name,
+            confirmLabel = "Renombrar",
+            onConfirm = { vm.rename(file, it) },
+            onDismiss = { renameFor = null }
+        )
+    }
+
+    deleteFor?.let { ids ->
+        ConfirmDialog(
+            title = "Eliminar ${ids.size} elemento(s)",
+            text = "Se eliminarán también los mensajes de Telegram que los respaldan. Esta acción es irreversible.",
+            confirmLabel = "Eliminar",
+            destructive = true,
+            onConfirm = { vm.delete(ids) },
+            onDismiss = { deleteFor = null }
+        )
+    }
+
+    copyMoveFor?.let { (ids, move) ->
+        InputDialog(
+            title = if (move) "Mover a carpeta" else "Copiar a carpeta",
+            label = "Ruta destino (p. ej. /backup/)",
+            initialValue = "/",
+            confirmLabel = if (move) "Mover" else "Copiar",
+            onConfirm = { vm.copyOrMove(ids, it, move) },
+            onDismiss = { copyMoveFor = null }
+        )
+    }
+
+    if (showCreateFolder) {
+        InputDialog(
+            title = "Nueva carpeta",
+            label = "Nombre",
+            confirmLabel = "Crear",
+            onConfirm = vm::createFolder,
+            onDismiss = { showCreateFolder = false }
+        )
+    }
+
+    playlistFor?.let { file ->
+        AlertDialog(
+            onDismissRequest = { playlistFor = null },
+            title = { Text("Añadir a playlist") },
+            text = {
+                val playlists = state.playlists
+                when {
+                    playlists == null -> Text("Cargando playlists…")
+                    playlists.isEmpty() -> Text("No hay playlists. Crea una en la pestaña Listas.")
+                    else -> Column {
+                        playlists.forEach { pl ->
+                            ListItem(
+                                headlineContent = { Text(pl.name) },
+                                supportingContent = { Text("${pl.trackCount} pistas") },
+                                modifier = Modifier.clickable {
+                                    vm.addToPlaylist(file, pl)
+                                    playlistFor = null
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { playlistFor = null }) { Text("Cerrar") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun SortMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    current: String,
+    descending: Boolean,
+    onPick: (String, Boolean) -> Unit
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        listOf(
+            "name" to "Nombre",
+            "date" to "Fecha",
+            "size" to "Tamaño",
+            "type" to "Tipo"
+        ).forEach { (value, label) ->
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (current == value) {
+                            "$label ${if (descending) "↓" else "↑"}"
+                        } else label
+                    )
+                },
+                onClick = {
+                    val desc = if (current == value) !descending else false
+                    onPick(value, desc)
+                    onDismiss()
+                }
+            )
+        }
+    }
+}
