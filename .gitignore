@@ -15,9 +15,10 @@ output-metadata.json
 # Kotlin
 .kotlin/
 
-# Keystore (never commit signing keys)
+# Keystore & signing credentials (never commit)
 *.jks
 *.keystore
+signing-credentials.txt
 
 # Logs / misc
 *.log
