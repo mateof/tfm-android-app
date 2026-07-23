@@ -27,7 +27,7 @@ android {
             if (keystorePath != null) {
                 storeFile = file(keystorePath)
                 storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
-                keyAlias = System.getenv("KEY_ALIAS") ?: "tfm"
+                keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "kavita"
                 keyPassword = System.getenv("KEY_PASSWORD") ?: ""
             }
         }
