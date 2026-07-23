@@ -21,7 +21,9 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class ChannelsTab(val label: String) { SAVED("Guardados"), ALL("Todos"), FAVORITES("Favoritos") }
+enum class ChannelsTab(val label: String) {
+    SAVED("Guardados"), MINE("Míos"), ALL("Todos"), FAVORITES("Favoritos")
+}
 
 data class ChannelsUiState(
     val loading: Boolean = false,
@@ -69,6 +71,9 @@ class ChannelsViewModel @Inject constructor(
 
     fun load(more: Boolean = false) {
         val s = _state.value
+        // "Míos" has no server-side owner filter, so we pull a large page and
+        // filter locally; paging is disabled for it.
+        val mine = s.tab == ChannelsTab.MINE
         val page = if (more) s.page + 1 else 1
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
@@ -84,17 +89,19 @@ class ChannelsViewModel @Inject constructor(
                         favoritesOnly = s.tab == ChannelsTab.FAVORITES,
                         search = s.search.ifBlank { null },
                         page = page,
-                        pageSize = 50
+                        pageSize = if (mine) 200 else 50
                     )
                 }
             }.onSuccess { paged ->
-                val items = paged.items
+                val items = if (mine) {
+                    paged.items.filter { it.isOwner }
+                } else paged.items
                 _state.value = _state.value.copy(
                     loading = false,
                     loadingMore = false,
                     channels = if (more) _state.value.channels + items else items,
                     page = page,
-                    hasNext = paged.page?.hasNext == true
+                    hasNext = !mine && paged.page?.hasNext == true
                 )
             }.onFailure { e ->
                 if (e is kotlinx.coroutines.CancellationException) return@onFailure

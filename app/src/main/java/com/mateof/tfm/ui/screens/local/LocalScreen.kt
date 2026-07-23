@@ -85,6 +85,10 @@ fun LocalScreen(navController: NavHostController, vm: LocalViewModel = hiltViewM
     var renameFor by remember { mutableStateOf<ApiFileDto?>(null) }
     var deleteFor by remember { mutableStateOf<List<String>?>(null) }
     var channelPickerFor by remember { mutableStateOf<List<String>?>(null) }
+    // (paths, channel) once a target channel is chosen; drives the folder picker.
+    var folderPickerFor by remember {
+        mutableStateOf<Pair<List<String>, com.mateof.tfm.data.model.ChannelDto>?>(null)
+    }
     var showCreateFolder by rememberSaveable { mutableStateOf(false) }
     var confirmClearCache by rememberSaveable { mutableStateOf(false) }
 
@@ -337,7 +341,8 @@ fun LocalScreen(navController: NavHostController, vm: LocalViewModel = hiltViewM
                             ListItem(
                                 headlineContent = { Text(channel.name ?: "") },
                                 modifier = Modifier.clickable {
-                                    vm.uploadToChannel(paths, channel)
+                                    // Next step: choose the destination folder.
+                                    folderPickerFor = paths to channel
                                     channelPickerFor = null
                                 }
                             )
@@ -348,6 +353,18 @@ fun LocalScreen(navController: NavHostController, vm: LocalViewModel = hiltViewM
             confirmButton = {
                 TextButton(onClick = { channelPickerFor = null }) { Text("Cerrar") }
             }
+        )
+    }
+
+    folderPickerFor?.let { (paths, channel) ->
+        com.mateof.tfm.ui.components.ChannelFolderPicker(
+            channelId = channel.id.toString(),
+            channelName = channel.name ?: "",
+            onPick = { targetPath ->
+                vm.uploadToChannel(paths, channel, targetPath)
+                folderPickerFor = null
+            },
+            onDismiss = { folderPickerFor = null }
         )
     }
 }

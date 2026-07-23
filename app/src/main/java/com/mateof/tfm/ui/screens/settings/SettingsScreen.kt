@@ -6,14 +6,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +31,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,6 +72,15 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import javax.inject.Inject
 
+enum class UpdatePhase { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING, ERROR }
+
+data class UpdateUiState(
+    val phase: UpdatePhase = UpdatePhase.IDLE,
+    val info: com.mateof.tfm.update.UpdateInfo? = null,
+    val progress: Int = 0,
+    val message: String? = null
+)
+
 data class SettingsUiState(
     val loading: Boolean = true,
     val error: String? = null,
@@ -76,7 +90,9 @@ data class SettingsUiState(
     val saving: Boolean = false,
     val loggedOut: Boolean = false,
     val snackbar: String? = null,
-    val serverUrl: String = ""
+    val serverUrl: String = "",
+    val appVersion: String = "",
+    val update: UpdateUiState = UpdateUiState()
 )
 
 @HiltViewModel
@@ -84,10 +100,13 @@ class SettingsViewModel @Inject constructor(
     private val systemApi: SystemApi,
     private val authApi: AuthApi,
     private val configApi: ConfigApi,
+    private val updater: com.mateof.tfm.update.AppUpdater,
     prefs: ServerPreferences
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(SettingsUiState(serverUrl = prefs.current.baseUrl))
+    private val _state = MutableStateFlow(
+        SettingsUiState(serverUrl = prefs.current.baseUrl, appVersion = updater.currentVersion)
+    )
     val state = _state.asStateFlow()
 
     init {
@@ -157,6 +176,61 @@ class SettingsViewModel @Inject constructor(
                     _state.value = _state.value.copy(saving = false, snackbar = e.userMessage())
                 }
         }
+    }
+
+    // ------------------------------------------------------------- updates
+
+    fun checkForUpdate() {
+        _state.value = _state.value.copy(update = UpdateUiState(phase = UpdatePhase.CHECKING))
+        viewModelScope.launch {
+            val result = updater.check()
+            _state.value = _state.value.copy(
+                update = when (result) {
+                    is com.mateof.tfm.update.UpdateCheck.UpToDate ->
+                        UpdateUiState(phase = UpdatePhase.UP_TO_DATE)
+                    is com.mateof.tfm.update.UpdateCheck.Available ->
+                        UpdateUiState(phase = UpdatePhase.AVAILABLE, info = result.info)
+                    is com.mateof.tfm.update.UpdateCheck.Error ->
+                        UpdateUiState(phase = UpdatePhase.ERROR, message = result.message)
+                }
+            )
+        }
+    }
+
+    fun downloadAndInstall() {
+        val info = _state.value.update.info ?: return
+        if (!updater.canInstall()) {
+            updater.requestInstallPermission()
+            _state.value = _state.value.copy(
+                snackbar = "Permite instalar apps de esta fuente y vuelve a intentarlo"
+            )
+            return
+        }
+        _state.value = _state.value.copy(
+            update = _state.value.update.copy(phase = UpdatePhase.DOWNLOADING, progress = 0)
+        )
+        viewModelScope.launch {
+            val file = updater.download(info) { pct ->
+                _state.value = _state.value.copy(
+                    update = _state.value.update.copy(progress = pct.coerceAtLeast(0))
+                )
+            }
+            if (file != null) {
+                updater.install(file)
+                _state.value = _state.value.copy(update = UpdateUiState())
+            } else {
+                _state.value = _state.value.copy(
+                    update = UpdateUiState(
+                        phase = UpdatePhase.ERROR,
+                        message = "No se pudo descargar el APK"
+                    )
+                )
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        _state.value = _state.value.copy(update = UpdateUiState())
     }
 
     fun snackbarShown() {
@@ -334,9 +408,100 @@ fun SettingsScreen(navController: NavHostController, vm: SettingsViewModel = hil
                     }
                 }
 
+                Spacer(Modifier.height(16.dp))
+
+                // --------------------------------------------------- app / updates
+                SectionCard(
+                    icon = { Icon(Icons.Outlined.Android, null) },
+                    title = "Aplicación"
+                ) {
+                    InfoLine("Versión instalada", state.appVersion)
+                    val phase = state.update.phase
+                    if (phase == UpdatePhase.UP_TO_DATE) {
+                        Text(
+                            "Tienes la última versión.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    if (phase == UpdatePhase.ERROR) {
+                        Text(
+                            state.update.message ?: "Error comprobando actualizaciones",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = vm::checkForUpdate,
+                        enabled = phase != UpdatePhase.CHECKING,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (phase == UpdatePhase.CHECKING) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text("Buscar actualizaciones")
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(32.dp))
             }
         }
+    }
+
+    // ------------------------------------------------------------- update dialog
+    val update = state.update
+    if (update.phase == UpdatePhase.AVAILABLE || update.phase == UpdatePhase.DOWNLOADING) {
+        val downloading = update.phase == UpdatePhase.DOWNLOADING
+        AlertDialog(
+            onDismissRequest = { if (!downloading) vm.dismissUpdate() },
+            title = { Text("Nueva versión ${update.info?.versionName ?: ""}") },
+            text = {
+                Column {
+                    if (downloading) {
+                        Text("Descargando… ${update.progress}%")
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { update.progress / 100f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Text(
+                            "Instalada: ${state.appVersion}  →  Nueva: ${update.info?.versionName}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        val notes = update.info?.notes.orEmpty()
+                        if (notes.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 240.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                Text(notes, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (!downloading) {
+                    Button(onClick = vm::downloadAndInstall) {
+                        Text("Descargar e instalar")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!downloading) {
+                    TextButton(onClick = vm::dismissUpdate) { Text("Ahora no") }
+                }
+            }
+        )
     }
 
     if (confirmLogout) {

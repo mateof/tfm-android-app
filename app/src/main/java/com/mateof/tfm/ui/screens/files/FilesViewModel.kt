@@ -56,13 +56,17 @@ data class FilesUiState(
     val selection: Set<String> = emptySet(),
     val busy: Boolean = false,
     val snackbar: String? = null,
-    val playlists: List<PlaylistDto>? = null
+    val playlists: List<PlaylistDto>? = null,
+    // True when the channel has no local index yet, so browsing has nothing
+    // to show; the screen offers to create + scan it.
+    val needsIndex: Boolean = false
 )
 
 @HiltViewModel
 class FilesViewModel @Inject constructor(
     savedState: SavedStateHandle,
     private val filesApi: FilesApi,
+    private val channelsApi: com.mateof.tfm.data.api.ChannelsApi,
     private val transfersApi: TransfersApi,
     private val playlistsApi: PlaylistsApi,
     private val mediaUrls: MediaUrls,
@@ -144,6 +148,7 @@ class FilesViewModel @Inject constructor(
                 _state.value = _state.value.copy(
                     loading = false,
                     loadingMore = false,
+                    needsIndex = false,
                     contents = contents ?: _state.value.contents,
                     items = if (more) _state.value.items + items else items,
                     page = page,
@@ -151,10 +156,41 @@ class FilesViewModel @Inject constructor(
                 )
             }.onFailure { e ->
                 if (e is kotlinx.coroutines.CancellationException) return@onFailure
+                // A channel with no local index answers channel_not_found /
+                // not_found; surface a dedicated "create the index" state.
+                val code = (e as? com.mateof.tfm.core.ApiException)?.code
+                val needsIndex = currentPath == "/" && !s.searchMode &&
+                    (code == "channel_not_found" || code == "not_found")
                 _state.value = _state.value.copy(
-                    loading = false, loadingMore = false, error = e.userMessage()
+                    loading = false,
+                    loadingMore = false,
+                    needsIndex = needsIndex,
+                    error = if (needsIndex) null else e.userMessage()
                 )
             }
+        }
+    }
+
+    /** Create the channel's local index and kick off a scan, then reload. */
+    fun createIndexAndScan() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true)
+            // Ignore "already exists" — we just want to guarantee the index.
+            runCatching { apiCall { channelsApi.createDatabase(channelId) } }
+            runCatching {
+                apiCall {
+                    channelsApi.refresh(
+                        channelId,
+                        com.mateof.tfm.data.model.RefreshChannelRequest()
+                    )
+                }
+            }
+            _state.value = _state.value.copy(
+                busy = false,
+                needsIndex = false,
+                snackbar = "Índice creado; escaneando el canal en segundo plano (ver Transfers)"
+            )
+            load()
         }
     }
 

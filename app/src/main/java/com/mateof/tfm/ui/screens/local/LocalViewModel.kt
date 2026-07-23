@@ -203,19 +203,21 @@ class LocalViewModel @Inject constructor(
         }
     }
 
-    fun uploadToChannel(paths: List<String>, channel: ChannelDto) {
+    fun uploadToChannel(paths: List<String>, channel: ChannelDto, targetPath: String) {
         viewModelScope.launch {
             runCatching {
                 apiCall {
                     transfersApi.startUploads(
                         StartUploadsRequest(
                             channelId = channel.id.toString(),
-                            localPaths = paths
+                            localPaths = paths,
+                            targetPath = targetPath
                         )
                     )
                 }
             }.onSuccess {
-                notify("Subida a «${channel.name}» encolada (ver Transfers)")
+                val where = if (targetPath == "/") "raíz" else targetPath
+                notify("Subida a «${channel.name}» ($where) encolada (ver Transfers)")
                 clearSelection()
             }.onFailure { e -> notify(e.userMessage()) }
         }

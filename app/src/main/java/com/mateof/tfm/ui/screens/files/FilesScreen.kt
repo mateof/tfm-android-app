@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -263,6 +264,7 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
 
             when {
                 state.loading -> LoadingBox(label = "Cargando ficheros…")
+                state.needsIndex -> NeedsIndexState(onCreate = { vm.createIndexAndScan() })
                 state.error != null -> ErrorState(state.error!!, onRetry = { vm.load() })
                 state.items.isEmpty() -> EmptyState("Carpeta vacía")
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -498,6 +500,43 @@ private fun SortMenu(
                     onDismiss()
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun NeedsIndexState(onCreate: () -> Unit) {
+    androidx.compose.foundation.layout.Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+    ) {
+        Icon(
+            Icons.Outlined.CreateNewFolder,
+            contentDescription = null,
+            modifier = Modifier.size(56.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "Este canal aún no tiene índice local",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 16.dp)
+        )
+        Text(
+            "Crea el índice y escanea el canal para poder navegar sus ficheros.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        androidx.compose.material3.Button(
+            onClick = onCreate,
+            modifier = Modifier.padding(top = 20.dp)
+        ) {
+            Icon(Icons.Outlined.CreateNewFolder, null)
+            Text("  Crear índice y escanear")
         }
     }
 }

@@ -169,9 +169,13 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
                 state.loading -> LoadingBox(label = "Cargando canales…")
                 state.error != null -> ErrorState(state.error!!, onRetry = { vm.load() })
                 state.channels.isEmpty() -> EmptyState(
-                    if (state.tab == ChannelsTab.SAVED)
-                        "No hay canales indexados todavía.\nIndexa uno desde la pestaña «Todos»."
-                    else "Sin resultados"
+                    when (state.tab) {
+                        ChannelsTab.SAVED ->
+                            "No hay canales indexados todavía.\nIndexa uno desde la pestaña «Todos»."
+                        ChannelsTab.MINE ->
+                            "No eres propietario de ningún canal.\nCrea uno con el botón +."
+                        else -> "Sin resultados"
+                    }
                 )
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(state.channels, key = { it.id }) { channel ->
@@ -179,13 +183,11 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
                             channel = channel,
                             imageUrl = mediaUrls.channelImage(channel.id),
                             onClick = {
-                                if (channel.hasDatabase) {
-                                    navController.navigate(
-                                        Routes.files(channel.id.toString(), channel.name ?: "")
-                                    )
-                                } else {
-                                    actionsFor = channel
-                                }
+                                // Always open the browser; it guides indexing
+                                // when the channel has no local database yet.
+                                navController.navigate(
+                                    Routes.files(channel.id.toString(), channel.name ?: "")
+                                )
                             },
                             onMore = { actionsFor = channel }
                         )
@@ -222,17 +224,17 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
             )
             HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("Explorar ficheros") },
+                leadingContent = { Icon(Icons.Outlined.Dns, null) },
+                modifier = Modifier.clickable {
+                    actionsFor = null
+                    navController.navigate(
+                        Routes.files(channel.id.toString(), channel.name ?: "")
+                    )
+                }
+            )
             if (channel.hasDatabase) {
-                ListItem(
-                    headlineContent = { Text("Explorar ficheros") },
-                    leadingContent = { Icon(Icons.Outlined.Dns, null) },
-                    modifier = Modifier.clickable {
-                        actionsFor = null
-                        navController.navigate(
-                            Routes.files(channel.id.toString(), channel.name ?: "")
-                        )
-                    }
-                )
                 ListItem(
                     headlineContent = { Text("Actualizar índice (buscar nuevos ficheros)") },
                     leadingContent = { Icon(Icons.Outlined.Refresh, null) },

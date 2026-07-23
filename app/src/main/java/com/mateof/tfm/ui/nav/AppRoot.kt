@@ -90,21 +90,26 @@ fun AppRoot(vm: AppRootViewModel = hiltViewModel()) {
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val isTopLevel = TABS.any { it.route == currentRoute }
+    // The mini player follows the user everywhere except the full-screen
+    // audio/video players themselves.
+    val showMiniPlayer = nowPlaying.hasMedia &&
+        currentRoute != Routes.PLAYER &&
+        currentRoute?.startsWith("video") != true
 
     LaunchedEffect(Unit) { vm.onAppVisible() }
 
     Scaffold(
         bottomBar = {
-            AnimatedVisibility(visible = isTopLevel) {
-                Column {
-                    if (nowPlaying.hasMedia && currentRoute != Routes.PLAYER) {
-                        MiniPlayer(
-                            nowPlaying = nowPlaying,
-                            onToggle = vm::togglePlayPause,
-                            onOpen = { navController.navigate(Routes.PLAYER) },
-                            onClose = vm::stopPlayback
-                        )
-                    }
+            Column {
+                if (showMiniPlayer) {
+                    MiniPlayer(
+                        nowPlaying = nowPlaying,
+                        onToggle = vm::togglePlayPause,
+                        onOpen = { navController.navigate(Routes.PLAYER) },
+                        onClose = vm::stopPlayback
+                    )
+                }
+                AnimatedVisibility(visible = isTopLevel) {
                     NavigationBar {
                         TABS.forEach { tab ->
                             val active = summary?.isWorking == true && tab.route == Routes.TRANSFERS
