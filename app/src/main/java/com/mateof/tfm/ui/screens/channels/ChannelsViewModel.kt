@@ -50,7 +50,11 @@ data class ChannelsUiState(
     val details: ChannelDto? = null,
     // Ids of folders currently expanded in the "Carpetas" tab. Ungrouped
     // section uses the sentinel id 0L.
-    val expandedFolders: Set<Long> = emptySet()
+    val expandedFolders: Set<Long> = emptySet(),
+    // Ids of channels that have a local index. Populated on every load and
+    // used to mark rows with the "indexed" badge — the server's plain
+    // channels list does not carry that flag.
+    val savedIds: Set<Long> = emptySet()
 )
 
 @OptIn(FlowPreview::class)
@@ -94,12 +98,32 @@ class ChannelsViewModel @Inject constructor(
                 loadingMore = more,
                 error = if (more) s.error else null
             )
+            if (!more) refreshSavedIds()
             when (s.tab) {
                 ChannelsTab.FOLDERS -> loadFolders(s)
                 ChannelsTab.SHARED -> loadShares(s)
                 else -> loadChannelList(s, more)
             }
         }
+    }
+
+    /**
+     * Fetches the set of channels that already have a local index. The plain
+     * `/channels` endpoint doesn't populate the `hasDatabase` flag, so we
+     * cross-reference against this set to badge rows correctly.
+     */
+    private suspend fun refreshSavedIds() {
+        runCatching {
+            apiCall { api.list(onlySaved = true, pageSize = 500) }
+        }.onSuccess { list ->
+            _state.value = _state.value.copy(savedIds = list.map { it.id }.toSet())
+        }
+    }
+
+    private fun markIndexed(list: List<ChannelDto>): List<ChannelDto> {
+        val ids = _state.value.savedIds
+        if (ids.isEmpty()) return list
+        return list.map { if (it.hasDatabase || it.id !in ids) it else it.copy(hasDatabase = true) }
     }
 
     private suspend fun loadChannelList(s: ChannelsUiState, more: Boolean) {
@@ -117,7 +141,8 @@ class ChannelsViewModel @Inject constructor(
                 )
             }
         }.onSuccess { paged ->
-            val items = if (mine) paged.items.filter { it.isOwner } else paged.items
+            val filtered = if (mine) paged.items.filter { it.isOwner } else paged.items
+            val items = markIndexed(filtered)
             _state.value = _state.value.copy(
                 loading = false,
                 loadingMore = false,
@@ -136,8 +161,12 @@ class ChannelsViewModel @Inject constructor(
     private suspend fun loadFolders(s: ChannelsUiState) {
         runCatching { apiCall { api.folders() } }
             .onSuccess { data ->
+                val enriched = data.copy(
+                    folders = data.folders.map { f -> f.copy(channels = markIndexed(f.channels)) },
+                    ungrouped = markIndexed(data.ungrouped)
+                )
                 val query = s.search.trim()
-                val filtered = if (query.isBlank()) data else filterFolders(data, query)
+                val filtered = if (query.isBlank()) enriched else filterFolders(enriched, query)
                 _state.value = _state.value.copy(
                     loading = false,
                     loadingMore = false,

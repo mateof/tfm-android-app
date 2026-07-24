@@ -1,6 +1,7 @@
 package com.mateof.tfm.ui.screens.channels
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandMore
@@ -625,25 +627,34 @@ private fun ChannelRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                (channel.name ?: "?").take(1).uppercase(),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+        Box(modifier = Modifier.size(46.dp)) {
+            Box(
                 modifier = Modifier
                     .size(46.dp)
-                    .clip(CircleShape)
-            )
+                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    (channel.name ?: "?").take(1).uppercase(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                )
+            }
+            if (channel.hasDatabase) {
+                IndexedBadge(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(18.dp)
+                )
+            }
         }
         Column(
             modifier = Modifier
@@ -667,10 +678,11 @@ private fun ChannelRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            // Indexing is shown by the avatar badge, so it doesn't need a
+            // redundant word in the subtitle.
             Text(
                 buildString {
                     append(channel.type ?: "canal")
-                    if (channel.hasDatabase) append(" · indexado")
                     if (channel.isOwner) append(" · propio")
                 },
                 style = MaterialTheme.typography.bodySmall,
@@ -680,5 +692,26 @@ private fun ChannelRow(
         IconButton(onClick = onMore) {
             Icon(Icons.Outlined.Info, contentDescription = "Acciones")
         }
+    }
+}
+
+/**
+ * Small badge overlaid on a channel avatar to mark that the channel already
+ * has a local file index (i.e. is a valid upload/browse target).
+ */
+@Composable
+private fun IndexedBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.primary, CircleShape)
+            .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Filled.Bookmark,
+            contentDescription = "Canal indexado",
+            tint = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.size(11.dp)
+        )
     }
 }
