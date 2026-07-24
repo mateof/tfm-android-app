@@ -511,7 +511,8 @@ private fun ExportStrmDialog(
     onDismiss: () -> Unit
 ) {
     var toLocal by rememberSaveable { mutableStateOf(false) }
-    var destination by rememberSaveable { mutableStateOf("/strm/") }
+    var destination by rememberSaveable { mutableStateOf<String?>(null) }
+    var showFolderPicker by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -549,22 +550,34 @@ private fun ExportStrmDialog(
                     modifier = Modifier.clickable { toLocal = true }
                 )
                 if (toLocal) {
-                    OutlinedTextField(
-                        value = destination,
-                        onValueChange = { destination = it },
-                        label = { Text("Carpeta destino en el servidor") },
-                        placeholder = { Text("/strm/") },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    if (destination == null) {
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = { showFolderPicker = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+                            Spacer(Modifier.padding(horizontal = 4.dp))
+                            Text("Elegir carpeta…")
+                        }
+                    } else {
+                        ListItem(
+                            headlineContent = {
+                                Text(destination!!.ifBlank { "/" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            },
+                            supportingContent = { Text("Carpeta destino en el servidor") },
+                            leadingContent = { Icon(Icons.Outlined.FolderOpen, null) },
+                            trailingContent = {
+                                TextButton(onClick = { showFolderPicker = true }) { Text("Cambiar") }
+                            }
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
             TextButton(
-                enabled = !toLocal || destination.isNotBlank(),
+                enabled = !toLocal || destination != null,
                 onClick = { onExport(if (toLocal) destination else null) }
             ) { Text(if (toLocal) "Exportar" else "Descargar") }
         },
@@ -572,6 +585,18 @@ private fun ExportStrmDialog(
             TextButton(onClick = onDismiss) { Text("Cancelar") }
         }
     )
+
+    if (showFolderPicker) {
+        com.mateof.tfm.ui.components.LocalFolderPicker(
+            title = "Guardar .strm en…",
+            confirmLabel = "Elegir esta carpeta",
+            onPick = { picked ->
+                destination = picked
+                showFolderPicker = false
+            },
+            onDismiss = { showFolderPicker = false }
+        )
+    }
 }
 
 @Composable
