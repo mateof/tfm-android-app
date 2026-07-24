@@ -28,6 +28,7 @@ import com.mateof.tfm.playback.QueueTrack
 import com.mateof.tfm.util.DeviceDownloader
 import com.mateof.tfm.util.ExternalOpener
 import com.mateof.tfm.util.Uploads
+import com.mateof.tfm.util.VideoPlayers
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -77,6 +78,7 @@ class FilesViewModel @Inject constructor(
     private val player: PlayerConnection,
     private val downloader: DeviceDownloader,
     private val externalOpener: ExternalOpener,
+    private val videoPlayers: VideoPlayers,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -432,7 +434,11 @@ class FilesViewModel @Inject constructor(
             }
             "video" -> {
                 val url = mediaUrls.withKey(file.streamUrl)
-                if (url != null) PlayAction.OpenVideo(url, file.name) else PlayAction.None
+                when {
+                    url == null -> PlayAction.None
+                    videoPlayers.launchExternal(url, file.name) -> PlayAction.HandedOff
+                    else -> PlayAction.OpenVideo(url, file.name)
+                }
             }
             "photo" -> {
                 val url = mediaUrls.withKey(file.streamUrl ?: file.downloadUrl)
@@ -495,6 +501,9 @@ class FilesViewModel @Inject constructor(
 sealed interface PlayAction {
     data object None : PlayAction
     data object AudioStarted : PlayAction
+
+    /** Playback already started elsewhere (external video app). */
+    data object HandedOff : PlayAction
     data class OpenVideo(val url: String, val title: String) : PlayAction
     data class OpenImage(val url: String, val title: String) : PlayAction
 }

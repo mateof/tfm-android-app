@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Logout
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -26,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -42,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -58,6 +62,8 @@ import com.mateof.tfm.data.model.AppConfigDto
 import com.mateof.tfm.data.model.SystemInfoDto
 import com.mateof.tfm.data.model.TelegramUserDto
 import com.mateof.tfm.data.prefs.ServerPreferences
+import com.mateof.tfm.data.prefs.VideoPlayerChoice
+import com.mateof.tfm.util.VideoPlayers
 import com.mateof.tfm.ui.components.ConfirmDialog
 import com.mateof.tfm.ui.components.ErrorState
 import com.mateof.tfm.ui.components.LoadingBox
@@ -92,7 +98,9 @@ data class SettingsUiState(
     val snackbar: String? = null,
     val serverUrl: String = "",
     val appVersion: String = "",
-    val update: UpdateUiState = UpdateUiState()
+    val update: UpdateUiState = UpdateUiState(),
+    val videoPlayer: String = VideoPlayerChoice.INTERNAL,
+    val videoApps: List<VideoPlayers.PlayerApp> = emptyList()
 )
 
 @HiltViewModel
@@ -101,16 +109,29 @@ class SettingsViewModel @Inject constructor(
     private val authApi: AuthApi,
     private val configApi: ConfigApi,
     private val updater: com.mateof.tfm.update.AppUpdater,
-    prefs: ServerPreferences
+    private val videoPlayers: VideoPlayers,
+    private val prefs: ServerPreferences
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
-        SettingsUiState(serverUrl = prefs.current.baseUrl, appVersion = updater.currentVersion)
+        SettingsUiState(
+            serverUrl = prefs.current.baseUrl,
+            appVersion = updater.currentVersion,
+            videoPlayer = prefs.videoPlayer.value,
+            videoApps = videoPlayers.installed()
+        )
     )
     val state = _state.asStateFlow()
 
     init {
         load()
+        viewModelScope.launch {
+            prefs.videoPlayer.collect { _state.value = _state.value.copy(videoPlayer = it) }
+        }
+    }
+
+    fun setVideoPlayer(value: String) {
+        viewModelScope.launch { prefs.saveVideoPlayer(value) }
     }
 
     fun load() {
@@ -410,6 +431,43 @@ fun SettingsScreen(navController: NavHostController, vm: SettingsViewModel = hil
 
                 Spacer(Modifier.height(16.dp))
 
+                // ------------------------------------------------- video player
+                SectionCard(
+                    icon = { Icon(Icons.Outlined.Movie, null) },
+                    title = "Reproducción de vídeo"
+                ) {
+                    Text(
+                        "Elige con qué app se abren los vídeos.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    VideoPlayerOption(
+                        label = "Reproductor interno",
+                        selected = state.videoPlayer == VideoPlayerChoice.INTERNAL,
+                        onSelect = { vm.setVideoPlayer(VideoPlayerChoice.INTERNAL) }
+                    )
+                    VideoPlayerOption(
+                        label = "Preguntar cada vez",
+                        selected = state.videoPlayer == VideoPlayerChoice.ASK,
+                        onSelect = { vm.setVideoPlayer(VideoPlayerChoice.ASK) }
+                    )
+                    VideoPlayerOption(
+                        label = "Reproductor por defecto del sistema",
+                        selected = state.videoPlayer == VideoPlayerChoice.SYSTEM,
+                        onSelect = { vm.setVideoPlayer(VideoPlayerChoice.SYSTEM) }
+                    )
+                    state.videoApps.forEach { app ->
+                        VideoPlayerOption(
+                            label = app.label,
+                            selected = state.videoPlayer == app.packageName,
+                            onSelect = { vm.setVideoPlayer(app.packageName) }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
                 // --------------------------------------------------- app / updates
                 SectionCard(
                     icon = { Icon(Icons.Outlined.Android, null) },
@@ -536,6 +594,20 @@ private fun SectionCard(
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             content()
         }
+    }
+}
+
+@Composable
+private fun VideoPlayerOption(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Text(label, modifier = Modifier.padding(start = 8.dp))
     }
 }
 

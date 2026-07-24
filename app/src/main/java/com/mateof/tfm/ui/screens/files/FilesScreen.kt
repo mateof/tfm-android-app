@@ -350,6 +350,7 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                                             Routes.image(action.url, action.title)
                                         )
                                         PlayAction.AudioStarted -> Unit
+                                        PlayAction.HandedOff -> Unit
                                         PlayAction.None -> actionsFor = file
                                     }
                                 }

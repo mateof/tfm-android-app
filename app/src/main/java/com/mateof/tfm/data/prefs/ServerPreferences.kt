@@ -30,6 +30,16 @@ data class ServerConfig(
     val normalizedBaseUrl: String get() = baseUrl.trimEnd('/')
 }
 
+/**
+ * Which app plays video files. Any other value is the package name of an
+ * installed player (VLC, MX Player, …).
+ */
+object VideoPlayerChoice {
+    const val INTERNAL = "internal"
+    const val ASK = "ask"
+    const val SYSTEM = "system"
+}
+
 @Singleton
 class ServerPreferences @Inject constructor(
     @ApplicationContext private val context: Context
@@ -38,6 +48,7 @@ class ServerPreferences @Inject constructor(
         val BASE_URL = stringPreferencesKey("base_url")
         val API_KEY = stringPreferencesKey("api_key")
         val CONFIGURED = booleanPreferencesKey("configured")
+        val VIDEO_PLAYER = stringPreferencesKey("video_player")
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -62,12 +73,20 @@ class ServerPreferences @Inject constructor(
 
     val current: ServerConfig get() = config.value
 
+    val videoPlayer: StateFlow<String> = context.dataStore.data
+        .map { it[Keys.VIDEO_PLAYER] ?: VideoPlayerChoice.INTERNAL }
+        .stateIn(scope, SharingStarted.Eagerly, VideoPlayerChoice.INTERNAL)
+
     suspend fun save(baseUrl: String, apiKey: String) {
         context.dataStore.edit { p ->
             p[Keys.BASE_URL] = baseUrl.trimEnd('/')
             p[Keys.API_KEY] = apiKey
             p[Keys.CONFIGURED] = true
         }
+    }
+
+    suspend fun saveVideoPlayer(value: String) {
+        context.dataStore.edit { p -> p[Keys.VIDEO_PLAYER] = value }
     }
 
     suspend fun awaitLoaded(): ServerConfig = configFlow.first()

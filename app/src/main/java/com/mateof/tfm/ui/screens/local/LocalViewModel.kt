@@ -23,6 +23,7 @@ import com.mateof.tfm.ui.screens.files.PlayAction
 import com.mateof.tfm.util.DeviceDownloader
 import com.mateof.tfm.util.ExternalOpener
 import com.mateof.tfm.util.Uploads
+import com.mateof.tfm.util.VideoPlayers
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -59,6 +60,7 @@ class LocalViewModel @Inject constructor(
     private val player: PlayerConnection,
     private val downloader: DeviceDownloader,
     private val externalOpener: ExternalOpener,
+    private val videoPlayers: VideoPlayers,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -257,7 +259,11 @@ class LocalViewModel @Inject constructor(
             "video" -> {
                 // Raw file, not the transcoding endpoint (403 when transcode disabled); FFmpeg decodes it.
                 val url = mediaUrls.withKey(file.downloadUrl ?: file.streamUrl)
-                if (url != null) PlayAction.OpenVideo(url, file.name) else PlayAction.None
+                when {
+                    url == null -> PlayAction.None
+                    videoPlayers.launchExternal(url, file.name) -> PlayAction.HandedOff
+                    else -> PlayAction.OpenVideo(url, file.name)
+                }
             }
             "photo" -> {
                 val url = mediaUrls.withKey(file.downloadUrl ?: file.streamUrl)
