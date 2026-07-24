@@ -26,6 +26,7 @@ import com.mateof.tfm.data.repo.MediaUrls
 import com.mateof.tfm.playback.PlayerConnection
 import com.mateof.tfm.playback.QueueTrack
 import com.mateof.tfm.util.DeviceDownloader
+import com.mateof.tfm.util.ExternalOpener
 import com.mateof.tfm.util.Uploads
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -75,6 +76,7 @@ class FilesViewModel @Inject constructor(
     private val mediaUrls: MediaUrls,
     private val player: PlayerConnection,
     private val downloader: DeviceDownloader,
+    private val externalOpener: ExternalOpener,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -261,6 +263,24 @@ class FilesViewModel @Inject constructor(
         }
     }
 
+    fun openWithSystem(file: ApiFileDto) {
+        _state.value = _state.value.copy(busy = true)
+        viewModelScope.launch {
+            val result = externalOpener.open(
+                url = file.downloadUrl ?: file.streamUrl,
+                fileName = file.name,
+                extensionHint = file.type
+            )
+            _state.value = _state.value.copy(busy = false)
+            when (result) {
+                ExternalOpener.Result.Success -> Unit
+                ExternalOpener.Result.NoUrl -> notify("Este elemento no tiene URL de descarga")
+                ExternalOpener.Result.NoAppFound -> notify("No hay ninguna app que pueda abrir este tipo de fichero")
+                is ExternalOpener.Result.Failed -> notify("No se pudo abrir: ${result.message}")
+            }
+        }
+    }
+
     fun downloadSelectionToDevice() {
         val files = _state.value.items.filter { it.id in _state.value.selection && it.isFile }
         files.forEach { downloader.download(it.downloadUrl, it.name) }
@@ -414,6 +434,10 @@ class FilesViewModel @Inject constructor(
                 val url = mediaUrls.withKey(file.streamUrl)
                 if (url != null) PlayAction.OpenVideo(url, file.name) else PlayAction.None
             }
+            "photo" -> {
+                val url = mediaUrls.withKey(file.streamUrl ?: file.downloadUrl)
+                if (url != null) PlayAction.OpenImage(url, file.name) else PlayAction.None
+            }
             else -> PlayAction.None
         }
     }
@@ -472,4 +496,5 @@ sealed interface PlayAction {
     data object None : PlayAction
     data object AudioStarted : PlayAction
     data class OpenVideo(val url: String, val title: String) : PlayAction
+    data class OpenImage(val url: String, val title: String) : PlayAction
 }

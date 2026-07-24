@@ -42,6 +42,7 @@ import com.mateof.tfm.ui.screens.playlists.PlaylistsScreen
 import com.mateof.tfm.ui.screens.settings.SettingsScreen
 import com.mateof.tfm.ui.screens.setup.SetupScreen
 import com.mateof.tfm.ui.screens.transfers.TransfersScreen
+import com.mateof.tfm.ui.screens.image.ImageViewerScreen
 import com.mateof.tfm.ui.screens.video.VideoPlayerScreen
 
 object Routes {
@@ -65,6 +66,9 @@ object Routes {
 
     fun video(url: String, title: String) =
         "video?url=${Uri.encode(url)}&title=${Uri.encode(title)}"
+
+    fun image(url: String, title: String) =
+        "image?url=${Uri.encode(url)}&title=${Uri.encode(title)}"
 }
 
 private data class TabItem(
@@ -94,7 +98,8 @@ fun AppRoot(vm: AppRootViewModel = hiltViewModel()) {
     // audio/video players themselves.
     val showMiniPlayer = nowPlaying.hasMedia &&
         currentRoute != Routes.PLAYER &&
-        currentRoute?.startsWith("video") != true
+        currentRoute?.startsWith("video") != true &&
+        currentRoute?.startsWith("image") != true
 
     LaunchedEffect(Unit) { vm.onAppVisible() }
 
@@ -161,6 +166,7 @@ fun AppRoot(vm: AppRootViewModel = hiltViewModel()) {
             composable("messages/{channelId}?name={name}") { MessagesScreen(navController) }
             composable("playlist/{id}") { PlaylistDetailScreen(navController) }
             composable("video?url={url}&title={title}") { VideoPlayerScreen(navController) }
+            composable("image?url={url}&title={title}") { ImageViewerScreen(navController) }
         }
     }
 }

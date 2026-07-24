@@ -21,6 +21,7 @@ import com.mateof.tfm.playback.PlayerConnection
 import com.mateof.tfm.playback.QueueTrack
 import com.mateof.tfm.ui.screens.files.PlayAction
 import com.mateof.tfm.util.DeviceDownloader
+import com.mateof.tfm.util.ExternalOpener
 import com.mateof.tfm.util.Uploads
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -57,6 +58,7 @@ class LocalViewModel @Inject constructor(
     private val mediaUrls: MediaUrls,
     private val player: PlayerConnection,
     private val downloader: DeviceDownloader,
+    private val externalOpener: ExternalOpener,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -173,6 +175,24 @@ class LocalViewModel @Inject constructor(
         }
     }
 
+    fun openWithSystem(file: ApiFileDto) {
+        _state.value = _state.value.copy(busy = true)
+        viewModelScope.launch {
+            val result = externalOpener.open(
+                url = file.downloadUrl ?: file.streamUrl,
+                fileName = file.name,
+                extensionHint = file.type
+            )
+            _state.value = _state.value.copy(busy = false)
+            when (result) {
+                ExternalOpener.Result.Success -> Unit
+                ExternalOpener.Result.NoUrl -> notify("Sin URL de descarga")
+                ExternalOpener.Result.NoAppFound -> notify("No hay ninguna app que pueda abrir este tipo de fichero")
+                is ExternalOpener.Result.Failed -> notify("No se pudo abrir: ${result.message}")
+            }
+        }
+    }
+
     fun uploadFromDevice(uris: List<Uri>) {
         if (uris.isEmpty()) return
         notify("Subiendo ${uris.size} fichero(s) al almacenamiento del servidor…")
@@ -238,6 +258,10 @@ class LocalViewModel @Inject constructor(
                 // Raw file, not the transcoding endpoint (403 when transcode disabled); FFmpeg decodes it.
                 val url = mediaUrls.withKey(file.downloadUrl ?: file.streamUrl)
                 if (url != null) PlayAction.OpenVideo(url, file.name) else PlayAction.None
+            }
+            "photo" -> {
+                val url = mediaUrls.withKey(file.downloadUrl ?: file.streamUrl)
+                if (url != null) PlayAction.OpenImage(url, file.name) else PlayAction.None
             }
             else -> PlayAction.None
         }

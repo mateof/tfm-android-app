@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
@@ -345,6 +346,9 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                                         is PlayAction.OpenVideo -> navController.navigate(
                                             Routes.video(action.url, action.title)
                                         )
+                                        is PlayAction.OpenImage -> navController.navigate(
+                                            Routes.image(action.url, action.title)
+                                        )
                                         PlayAction.AudioStarted -> Unit
                                         PlayAction.None -> actionsFor = file
                                     }
@@ -417,6 +421,14 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                     leadingContent = { Icon(Icons.Outlined.Download, null) },
                     modifier = Modifier.clickable {
                         vm.downloadToDevice(file); actionsFor = null
+                    }
+                )
+                ListItem(
+                    headlineContent = { Text("Abrir con app externa…") },
+                    supportingContent = { Text("Elige otra app del sistema") },
+                    leadingContent = { Icon(Icons.Outlined.OpenInNew, null) },
+                    modifier = Modifier.clickable {
+                        vm.openWithSystem(file); actionsFor = null
                     }
                 )
             }

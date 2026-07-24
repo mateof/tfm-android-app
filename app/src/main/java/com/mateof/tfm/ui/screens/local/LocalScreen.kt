@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -204,6 +205,9 @@ fun LocalScreen(navController: NavHostController, vm: LocalViewModel = hiltViewM
                                         is PlayAction.OpenVideo -> navController.navigate(
                                             Routes.video(action.url, action.title)
                                         )
+                                        is PlayAction.OpenImage -> navController.navigate(
+                                            Routes.image(action.url, action.title)
+                                        )
                                         PlayAction.AudioStarted -> Unit
                                         PlayAction.None -> actionsFor = file
                                     }
@@ -261,6 +265,14 @@ fun LocalScreen(navController: NavHostController, vm: LocalViewModel = hiltViewM
                     leadingContent = { Icon(Icons.Outlined.Download, null) },
                     modifier = Modifier.clickable {
                         vm.downloadToDevice(file); actionsFor = null
+                    }
+                )
+                ListItem(
+                    headlineContent = { Text("Abrir con app externa…") },
+                    supportingContent = { Text("Elige otra app del sistema") },
+                    leadingContent = { Icon(Icons.Outlined.OpenInNew, null) },
+                    modifier = Modifier.clickable {
+                        vm.openWithSystem(file); actionsFor = null
                     }
                 )
             }
