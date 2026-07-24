@@ -235,7 +235,8 @@ class LocalViewModel @Inject constructor(
                 PlayAction.AudioStarted
             }
             "video" -> {
-                val url = mediaUrls.withKey(file.streamUrl)
+                // Raw file, not the transcoding endpoint (403 when transcode disabled); FFmpeg decodes it.
+                val url = mediaUrls.withKey(file.downloadUrl ?: file.streamUrl)
                 if (url != null) PlayAction.OpenVideo(url, file.name) else PlayAction.None
             }
             else -> PlayAction.None
