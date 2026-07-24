@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.MovieCreation
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PlaylistAdd
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material.icons.outlined.UploadFile
@@ -49,6 +50,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -202,6 +204,9 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                         }
                     },
                     actions = {
+                        IconButton(onClick = { vm.load() }) {
+                            Icon(Icons.Outlined.Refresh, "Recargar")
+                        }
                         IconButton(onClick = { showSearch = !showSearch }) {
                             Icon(Icons.Outlined.Search, "Buscar")
                         }
@@ -304,8 +309,15 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                 }
             }
 
+            // Pull-to-refresh over the list. During a background scan the
+            // channel db grows silently; swiping reloads without leaving.
+            PullToRefreshBox(
+                isRefreshing = state.loading && state.items.isNotEmpty(),
+                onRefresh = { vm.load() },
+                modifier = Modifier.fillMaxSize()
+            ) {
             when {
-                state.loading -> LoadingBox(label = "Cargando ficheros…")
+                state.loading && state.items.isEmpty() -> LoadingBox(label = "Cargando ficheros…")
                 state.needsIndex -> NeedsIndexState(onCreate = { showScanOptions = true })
                 state.error != null -> ErrorState(state.error!!, onRetry = { vm.load() })
                 state.items.isEmpty() -> EmptyState("Carpeta vacía")
@@ -359,6 +371,7 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                     }
                     item { Spacer(Modifier.height(88.dp)) }
                 }
+            }
             }
         }
     }
