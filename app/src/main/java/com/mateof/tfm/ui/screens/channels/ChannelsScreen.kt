@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Dns
@@ -180,6 +182,7 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
                 state.tab == ChannelsTab.FOLDERS -> FoldersBody(
                     state = state,
                     mediaUrls = mediaUrls,
+                    onToggleFolder = vm::toggleFolder,
                     onOpen = { channel ->
                         navController.navigate(
                             Routes.files(channel.id.toString(), channel.name ?: "")
@@ -414,10 +417,13 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
     }
 }
 
+private const val UNGROUPED_ID = 0L
+
 @Composable
 private fun FoldersBody(
     state: ChannelsUiState,
     mediaUrls: MediaUrls,
+    onToggleFolder: (Long) -> Unit,
     onOpen: (ChannelDto) -> Unit,
     onMore: (ChannelDto) -> Unit
 ) {
@@ -426,35 +432,51 @@ private fun FoldersBody(
         EmptyState("No hay carpetas configuradas en Telegram")
         return
     }
+    // With an active search, force-expand every group so results are visible.
+    val searching = state.search.isNotBlank()
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         data.folders.forEach { folder ->
+            val expanded = searching || folder.id in state.expandedFolders
             item(key = "h-${folder.id}") {
                 FolderHeader(
                     title = folder.title ?: "(sin nombre)",
                     emoji = folder.iconEmoji,
-                    count = folder.channels.size
+                    count = folder.channels.size,
+                    expanded = expanded,
+                    onClick = { onToggleFolder(folder.id) }
                 )
             }
-            items(folder.channels, key = { "${folder.id}-${it.id}" }) { channel ->
-                ChannelRow(
-                    channel = channel,
-                    imageUrl = mediaUrls.channelImage(channel.id),
-                    onClick = { onOpen(channel) },
-                    onMore = { onMore(channel) }
-                )
+            if (expanded) {
+                items(folder.channels, key = { "${folder.id}-${it.id}" }) { channel ->
+                    ChannelRow(
+                        channel = channel,
+                        imageUrl = mediaUrls.channelImage(channel.id),
+                        onClick = { onOpen(channel) },
+                        onMore = { onMore(channel) }
+                    )
+                }
             }
         }
         if (data.ungrouped.isNotEmpty()) {
+            val expanded = searching || UNGROUPED_ID in state.expandedFolders
             item(key = "h-ungrouped") {
-                FolderHeader(title = "Sin carpeta", emoji = null, count = data.ungrouped.size)
-            }
-            items(data.ungrouped, key = { "u-${it.id}" }) { channel ->
-                ChannelRow(
-                    channel = channel,
-                    imageUrl = mediaUrls.channelImage(channel.id),
-                    onClick = { onOpen(channel) },
-                    onMore = { onMore(channel) }
+                FolderHeader(
+                    title = "Sin carpeta",
+                    emoji = null,
+                    count = data.ungrouped.size,
+                    expanded = expanded,
+                    onClick = { onToggleFolder(UNGROUPED_ID) }
                 )
+            }
+            if (expanded) {
+                items(data.ungrouped, key = { "u-${it.id}" }) { channel ->
+                    ChannelRow(
+                        channel = channel,
+                        imageUrl = mediaUrls.channelImage(channel.id),
+                        onClick = { onOpen(channel) },
+                        onMore = { onMore(channel) }
+                    )
+                }
             }
         }
         item { Spacer(Modifier.height(80.dp)) }
@@ -462,14 +484,27 @@ private fun FoldersBody(
 }
 
 @Composable
-private fun FolderHeader(title: String, emoji: String?, count: Int) {
+private fun FolderHeader(
+    title: String,
+    emoji: String?,
+    count: Int,
+    expanded: Boolean,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Icon(
+            if (expanded) Icons.Filled.ExpandMore else Icons.Filled.ChevronRight,
+            contentDescription = if (expanded) "Colapsar" else "Expandir",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(4.dp))
         Icon(
             Icons.Outlined.Folder,
             contentDescription = null,

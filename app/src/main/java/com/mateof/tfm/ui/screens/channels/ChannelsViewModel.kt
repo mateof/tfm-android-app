@@ -47,7 +47,10 @@ data class ChannelsUiState(
     val hasNext: Boolean = false,
     val busy: Boolean = false,
     val snackbar: String? = null,
-    val details: ChannelDto? = null
+    val details: ChannelDto? = null,
+    // Ids of folders currently expanded in the "Carpetas" tab. Ungrouped
+    // section uses the sentinel id 0L.
+    val expandedFolders: Set<Long> = emptySet()
 )
 
 @OptIn(FlowPreview::class)
@@ -290,6 +293,13 @@ class ChannelsViewModel @Inject constructor(
 
     fun dismissDetails() {
         _state.value = _state.value.copy(details = null)
+    }
+
+    fun toggleFolder(id: Long) {
+        val cur = _state.value.expandedFolders
+        _state.value = _state.value.copy(
+            expandedFolders = if (id in cur) cur - id else cur + id
+        )
     }
 
     // ------------------------------------------------------------------ shares
