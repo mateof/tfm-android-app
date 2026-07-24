@@ -175,19 +175,15 @@ class FilesViewModel @Inject constructor(
     }
 
     /** Create the channel's local index and kick off a scan, then reload. */
-    fun createIndexAndScan() {
+    fun createIndexAndScan(
+        options: com.mateof.tfm.data.model.RefreshChannelRequest =
+            com.mateof.tfm.data.model.RefreshChannelRequest()
+    ) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true)
             // Ignore "already exists" — we just want to guarantee the index.
             runCatching { apiCall { channelsApi.createDatabase(channelId) } }
-            runCatching {
-                apiCall {
-                    channelsApi.refresh(
-                        channelId,
-                        com.mateof.tfm.data.model.RefreshChannelRequest()
-                    )
-                }
-            }
+            runCatching { apiCall { channelsApi.refresh(channelId, options) } }
             _state.value = _state.value.copy(
                 busy = false,
                 needsIndex = false,
@@ -227,6 +223,13 @@ class FilesViewModel @Inject constructor(
 
     fun clearSelection() {
         _state.value = _state.value.copy(selection = emptySet())
+    }
+
+    /** Selects every currently loaded item (pagination-limited). */
+    fun selectAll() {
+        _state.value = _state.value.copy(
+            selection = _state.value.items.map { it.id }.toSet()
+        )
     }
 
     private fun selectedIds(): List<String> = _state.value.selection.toList()

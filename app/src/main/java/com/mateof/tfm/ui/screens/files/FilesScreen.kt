@@ -103,7 +103,9 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
     var showSearch by rememberSaveable { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
+    var showSelectMenu by remember { mutableStateOf(false) }
     var showStrm by rememberSaveable { mutableStateOf(false) }
+    var showScanOptions by rememberSaveable { mutableStateOf(false) }
 
     val pickFiles = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
@@ -151,6 +153,25 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                         }
                         IconButton(onClick = { deleteFor = state.selection.toList() }) {
                             Icon(Icons.Outlined.Delete, "Eliminar")
+                        }
+                        IconButton(onClick = { showSelectMenu = true }) {
+                            Icon(Icons.Filled.MoreVert, "Más")
+                        }
+                        DropdownMenu(
+                            expanded = showSelectMenu,
+                            onDismissRequest = { showSelectMenu = false }
+                        ) {
+                            val allSelected = state.items.isNotEmpty() &&
+                                state.selection.size == state.items.size
+                            DropdownMenuItem(
+                                text = { Text("Seleccionar todos") },
+                                enabled = !allSelected,
+                                onClick = { vm.selectAll(); showSelectMenu = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Deseleccionar todos") },
+                                onClick = { vm.clearSelection(); showSelectMenu = false }
+                            )
                         }
                     }
                 )
@@ -285,7 +306,7 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
 
             when {
                 state.loading -> LoadingBox(label = "Cargando ficheros…")
-                state.needsIndex -> NeedsIndexState(onCreate = { vm.createIndexAndScan() })
+                state.needsIndex -> NeedsIndexState(onCreate = { showScanOptions = true })
                 state.error != null -> ErrorState(state.error!!, onRetry = { vm.load() })
                 state.items.isEmpty() -> EmptyState("Carpeta vacía")
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -473,6 +494,16 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
         )
     }
 
+    if (showScanOptions) {
+        ScanOptionsDialog(
+            onConfirm = { options ->
+                vm.createIndexAndScan(options)
+                showScanOptions = false
+            },
+            onDismiss = { showScanOptions = false }
+        )
+    }
+
     playlistFor?.let { file ->
         AlertDialog(
             onDismissRequest = { playlistFor = null },
@@ -596,6 +627,68 @@ private fun ExportStrmDialog(
             },
             onDismiss = { showFolderPicker = false }
         )
+    }
+}
+
+@Composable
+private fun ScanOptionsDialog(
+    onConfirm: (com.mateof.tfm.data.model.RefreshChannelRequest) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var includeVideo by rememberSaveable { mutableStateOf(true) }
+    var includeAudio by rememberSaveable { mutableStateOf(true) }
+    var includePhotos by rememberSaveable { mutableStateOf(true) }
+    var includeDocuments by rememberSaveable { mutableStateOf(true) }
+    val anySelected = includeVideo || includeAudio || includePhotos || includeDocuments
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Escanear canal") },
+        text = {
+            Column {
+                Text(
+                    "Elige qué tipos de contenido quieres indexar.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                ScanCheckbox("Vídeo", includeVideo) { includeVideo = it }
+                ScanCheckbox("Audio", includeAudio) { includeAudio = it }
+                ScanCheckbox("Fotos", includePhotos) { includePhotos = it }
+                ScanCheckbox("Documentos", includeDocuments) { includeDocuments = it }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = anySelected,
+                onClick = {
+                    onConfirm(
+                        com.mateof.tfm.data.model.RefreshChannelRequest(
+                            includeDocuments = includeDocuments,
+                            includeAudio = includeAudio,
+                            includeVideo = includeVideo,
+                            includePhotos = includePhotos
+                        )
+                    )
+                }
+            ) { Text("Escanear") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+@Composable
+private fun ScanCheckbox(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 4.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Spacer(Modifier.width(8.dp))
+        Text(label)
     }
 }
 
