@@ -7,6 +7,7 @@ import com.mateof.tfm.data.api.ConfigApi
 import com.mateof.tfm.data.api.FilesApi
 import com.mateof.tfm.data.api.LocalApi
 import com.mateof.tfm.data.api.PlaylistsApi
+import com.mateof.tfm.data.api.SharesApi
 import com.mateof.tfm.data.api.SystemApi
 import com.mateof.tfm.data.api.TransfersApi
 import com.mateof.tfm.data.net.ApiKeyInterceptor
@@ -68,4 +69,5 @@ object AppModule {
     @Provides @Singleton fun provideTransfersApi(r: Retrofit): TransfersApi = r.create(TransfersApi::class.java)
     @Provides @Singleton fun provideLocalApi(r: Retrofit): LocalApi = r.create(LocalApi::class.java)
     @Provides @Singleton fun providePlaylistsApi(r: Retrofit): PlaylistsApi = r.create(PlaylistsApi::class.java)
+    @Provides @Singleton fun provideSharesApi(r: Retrofit): SharesApi = r.create(SharesApi::class.java)
 }

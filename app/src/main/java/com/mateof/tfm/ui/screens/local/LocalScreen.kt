@@ -3,18 +3,24 @@ package com.mateof.tfm.ui.screens.local
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
@@ -24,8 +30,9 @@ import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.UploadFile
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -35,12 +42,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,9 +67,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
 import com.mateof.tfm.core.Format
 import com.mateof.tfm.data.model.ApiFileDto
+import com.mateof.tfm.data.model.ChannelDto
+import com.mateof.tfm.data.model.ChannelFoldersDto
+import com.mateof.tfm.data.model.ChatFolderDto
 import com.mateof.tfm.ui.components.ConfirmDialog
+import com.mateof.tfm.ui.screens.channels.rememberMediaUrls
 import com.mateof.tfm.ui.components.EmptyState
 import com.mateof.tfm.ui.components.ErrorState
 import com.mateof.tfm.ui.components.FileRow
@@ -328,31 +345,16 @@ fun LocalScreen(navController: NavHostController, vm: LocalViewModel = hiltViewM
     }
 
     channelPickerFor?.let { paths ->
-        AlertDialog(
-            onDismissRequest = { channelPickerFor = null },
-            title = { Text("Subir a canal") },
-            text = {
-                val channels = state.savedChannels
-                when {
-                    channels == null -> Text("Cargando canales…")
-                    channels.isEmpty() -> Text("No hay canales indexados.")
-                    else -> LazyColumn {
-                        items(channels, key = { it.id }) { channel ->
-                            ListItem(
-                                headlineContent = { Text(channel.name ?: "") },
-                                modifier = Modifier.clickable {
-                                    // Next step: choose the destination folder.
-                                    folderPickerFor = paths to channel
-                                    channelPickerFor = null
-                                }
-                            )
-                        }
-                    }
-                }
+        ChannelPickerSheet(
+            channels = state.savedChannels,
+            foldersData = state.channelPickerFolders,
+            query = state.channelPickerSearch,
+            onQueryChange = vm::setChannelPickerSearch,
+            onPick = { channel ->
+                folderPickerFor = paths to channel
+                channelPickerFor = null
             },
-            confirmButton = {
-                TextButton(onClick = { channelPickerFor = null }) { Text("Cerrar") }
-            }
+            onDismiss = { channelPickerFor = null }
         )
     }
 
@@ -367,4 +369,195 @@ fun LocalScreen(navController: NavHostController, vm: LocalViewModel = hiltViewM
             onDismiss = { folderPickerFor = null }
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChannelPickerSheet(
+    channels: List<ChannelDto>?,
+    foldersData: ChannelFoldersDto?,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onPick: (ChannelDto) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val mediaUrls = rememberMediaUrls()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Text(
+            "Subir a canal",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+        )
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = { Text("Buscar canal…") },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        HorizontalDivider()
+
+        when {
+            channels == null -> Box(
+                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) { Text("Cargando canales…") }
+
+            channels.isEmpty() -> Box(
+                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) { Text("No hay canales indexados.") }
+
+            else -> {
+                val sections = remember(channels, foldersData, query) {
+                    groupChannelsByFolder(channels, foldersData, query)
+                }
+                if (sections.all { it.channels.isEmpty() }) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Sin resultados") }
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
+                        sections.forEach { section ->
+                            if (section.channels.isEmpty()) return@forEach
+                            item(key = "h-${section.key}") {
+                                PickerFolderHeader(
+                                    title = section.title,
+                                    emoji = section.emoji,
+                                    count = section.channels.size
+                                )
+                            }
+                            items(section.channels, key = { "${section.key}-${it.id}" }) { c ->
+                                ListItem(
+                                    headlineContent = { Text(c.name ?: "(sin nombre)") },
+                                    supportingContent = {
+                                        Text(
+                                            c.type ?: "canal",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    },
+                                    leadingContent = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.primaryContainer,
+                                                    CircleShape
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                (c.name ?: "?").take(1).uppercase(),
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            AsyncImage(
+                                                model = mediaUrls.channelImage(c.id),
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .clip(CircleShape)
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.clickable { onPick(c) }
+                                )
+                            }
+                        }
+                        item { Spacer(Modifier.height(16.dp)) }
+                    }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End
+        ) {
+            TextButton(onClick = onDismiss) { Text("Cerrar") }
+        }
+    }
+}
+
+@Composable
+private fun PickerFolderHeader(title: String, emoji: String?, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.Folder,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(8.dp))
+        if (!emoji.isNullOrBlank()) {
+            Text(emoji, style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            count.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private data class PickerSection(
+    val key: String,
+    val title: String,
+    val emoji: String?,
+    val channels: List<ChannelDto>
+)
+
+/**
+ * Groups the indexed [channels] into the Telegram folders reported by
+ * [foldersData], keeping only channels that pass the [query] filter. Channels
+ * that don't belong to any folder go into a trailing "Sin carpeta" section.
+ * If [foldersData] is null, everything falls into a single "Todos" section.
+ */
+private fun groupChannelsByFolder(
+    channels: List<ChannelDto>,
+    foldersData: ChannelFoldersDto?,
+    query: String
+): List<PickerSection> {
+    val q = query.trim()
+    fun match(c: ChannelDto) = q.isBlank() ||
+        (c.name?.contains(q, ignoreCase = true) == true)
+
+    val filtered = channels.filter(::match)
+    if (foldersData == null || foldersData.folders.isEmpty()) {
+        return listOf(PickerSection("all", "Todos", null, filtered))
+    }
+    val byId = filtered.associateBy { it.id }
+    val used = mutableSetOf<Long>()
+    val sections = foldersData.folders.mapNotNull { folder: ChatFolderDto ->
+        val members = folder.channels.mapNotNull { byId[it.id] }
+        members.forEach { used += it.id }
+        if (members.isEmpty()) null
+        else PickerSection("f-${folder.id}", folder.title ?: "(sin nombre)", folder.iconEmoji, members)
+    }
+    val ungrouped = filtered.filter { it.id !in used }
+    return if (ungrouped.isEmpty()) sections
+    else sections + PickerSection("ungrouped", "Sin carpeta", null, ungrouped)
 }

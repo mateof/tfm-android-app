@@ -2,7 +2,6 @@ package com.mateof.tfm.ui.screens.channels
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,13 +18,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GroupAdd
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Message
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,10 +41,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -64,6 +67,7 @@ import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.mateof.tfm.core.Format
 import com.mateof.tfm.data.model.ChannelDto
+import com.mateof.tfm.data.model.SharedCollectionDto
 import com.mateof.tfm.data.repo.MediaUrls
 import com.mateof.tfm.ui.components.ConfirmDialog
 import com.mateof.tfm.ui.components.EmptyState
@@ -105,6 +109,8 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
     var showCreate by rememberSaveable { mutableStateOf(false) }
     var showJoin by rememberSaveable { mutableStateOf(false) }
     var leaveFor by remember { mutableStateOf<ChannelDto?>(null) }
+    var shareActionsFor by remember { mutableStateOf<SharedCollectionDto?>(null) }
+    var deleteShareFor by remember { mutableStateOf<SharedCollectionDto?>(null) }
 
     LaunchedEffect(state.snackbar) {
         state.snackbar?.let {
@@ -146,7 +152,7 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
             OutlinedTextField(
                 value = state.search,
                 onValueChange = vm::setSearch,
-                placeholder = { Text("Buscar canal…") },
+                placeholder = { Text("Buscar…") },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier
@@ -155,7 +161,10 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
             )
 
             Spacer(Modifier.height(8.dp))
-            TabRow(selectedTabIndex = state.tab.ordinal) {
+            ScrollableTabRow(
+                selectedTabIndex = state.tab.ordinal,
+                edgePadding = 8.dp
+            ) {
                 ChannelsTab.entries.forEach { t ->
                     Tab(
                         selected = state.tab == t,
@@ -166,12 +175,24 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
             }
 
             when {
-                state.loading -> LoadingBox(label = "Cargando canales…")
+                state.loading -> LoadingBox(label = "Cargando…")
                 state.error != null -> ErrorState(state.error!!, onRetry = { vm.load() })
+                state.tab == ChannelsTab.FOLDERS -> FoldersBody(
+                    state = state,
+                    mediaUrls = mediaUrls,
+                    onOpen = { channel ->
+                        navController.navigate(
+                            Routes.files(channel.id.toString(), channel.name ?: "")
+                        )
+                    },
+                    onMore = { actionsFor = it }
+                )
+                state.tab == ChannelsTab.SHARED -> SharedBody(
+                    shares = state.shares,
+                    onMore = { shareActionsFor = it }
+                )
                 state.channels.isEmpty() -> EmptyState(
                     when (state.tab) {
-                        ChannelsTab.SAVED ->
-                            "No hay canales indexados todavía.\nIndexa uno desde la pestaña «Todos»."
                         ChannelsTab.MINE ->
                             "No eres propietario de ningún canal.\nCrea uno con el botón +."
                         else -> "Sin resultados"
@@ -291,6 +312,42 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
         }
     }
 
+    shareActionsFor?.let { share ->
+        ModalBottomSheet(onDismissRequest = { shareActionsFor = null }) {
+            Text(
+                share.name ?: "(sin nombre)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("Descargar al servidor") },
+                supportingContent = {
+                    Text("Encola todos los ficheros de esta colección compartida")
+                },
+                leadingContent = { Icon(Icons.Outlined.CloudDownload, null) },
+                modifier = Modifier.clickable {
+                    vm.downloadSharedToServer(share); shareActionsFor = null
+                }
+            )
+            ListItem(
+                headlineContent = {
+                    Text("Eliminar colección", color = MaterialTheme.colorScheme.error)
+                },
+                leadingContent = {
+                    Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
+                },
+                modifier = Modifier.clickable {
+                    deleteShareFor = share; shareActionsFor = null
+                }
+            )
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+
     state.details?.let { d ->
         AlertDialog(
             onDismissRequest = vm::dismissDetails,
@@ -343,6 +400,166 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
             onConfirm = { vm.leave(channel, deleteDb = true, deleteOnTelegram = false) },
             onDismiss = { leaveFor = null }
         )
+    }
+
+    deleteShareFor?.let { share ->
+        ConfirmDialog(
+            title = "Eliminar «${share.name ?: share.id}»",
+            text = "Se retirará la colección compartida del servidor. Los ficheros originales en Telegram no se tocan.",
+            confirmLabel = "Eliminar",
+            destructive = true,
+            onConfirm = { vm.deleteShare(share); deleteShareFor = null },
+            onDismiss = { deleteShareFor = null }
+        )
+    }
+}
+
+@Composable
+private fun FoldersBody(
+    state: ChannelsUiState,
+    mediaUrls: MediaUrls,
+    onOpen: (ChannelDto) -> Unit,
+    onMore: (ChannelDto) -> Unit
+) {
+    val data = state.folders
+    if (data == null || (data.folders.isEmpty() && data.ungrouped.isEmpty())) {
+        EmptyState("No hay carpetas configuradas en Telegram")
+        return
+    }
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        data.folders.forEach { folder ->
+            item(key = "h-${folder.id}") {
+                FolderHeader(
+                    title = folder.title ?: "(sin nombre)",
+                    emoji = folder.iconEmoji,
+                    count = folder.channels.size
+                )
+            }
+            items(folder.channels, key = { "${folder.id}-${it.id}" }) { channel ->
+                ChannelRow(
+                    channel = channel,
+                    imageUrl = mediaUrls.channelImage(channel.id),
+                    onClick = { onOpen(channel) },
+                    onMore = { onMore(channel) }
+                )
+            }
+        }
+        if (data.ungrouped.isNotEmpty()) {
+            item(key = "h-ungrouped") {
+                FolderHeader(title = "Sin carpeta", emoji = null, count = data.ungrouped.size)
+            }
+            items(data.ungrouped, key = { "u-${it.id}" }) { channel ->
+                ChannelRow(
+                    channel = channel,
+                    imageUrl = mediaUrls.channelImage(channel.id),
+                    onClick = { onOpen(channel) },
+                    onMore = { onMore(channel) }
+                )
+            }
+        }
+        item { Spacer(Modifier.height(80.dp)) }
+    }
+}
+
+@Composable
+private fun FolderHeader(title: String, emoji: String?, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.Folder,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(8.dp))
+        if (!emoji.isNullOrBlank()) {
+            Text(emoji, style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            count.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun SharedBody(
+    shares: List<SharedCollectionDto>,
+    onMore: (SharedCollectionDto) -> Unit
+) {
+    if (shares.isEmpty()) {
+        EmptyState("Aún no has importado ninguna colección compartida.")
+        return
+    }
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(shares, key = { it.id }) { share ->
+            SharedRow(share = share, onMore = { onMore(share) })
+        }
+        item { Spacer(Modifier.height(80.dp)) }
+    }
+}
+
+@Composable
+private fun SharedRow(share: SharedCollectionDto, onMore: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onMore)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Outlined.Share,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 12.dp)
+        ) {
+            Text(
+                share.name ?: "(sin nombre)",
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            val subtitle = buildString {
+                share.description?.takeIf { it.isNotBlank() }?.let { append(it).append("  ·  ") }
+                append("Canal ").append(share.channelId ?: "?")
+            }
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onMore) {
+            Icon(Icons.Outlined.Info, contentDescription = "Acciones")
+        }
     }
 }
 

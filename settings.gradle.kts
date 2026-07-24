@@ -16,6 +16,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // NextLib (FFmpeg decoders for Media3) is published via JitPack.
+        maven { url = uri("https://jitpack.io") }
     }
 }
 

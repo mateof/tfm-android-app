@@ -12,6 +12,7 @@ import com.mateof.tfm.data.api.LocalApi
 import com.mateof.tfm.data.api.TransfersApi
 import com.mateof.tfm.data.model.ApiFileDto
 import com.mateof.tfm.data.model.ChannelDto
+import com.mateof.tfm.data.model.ChannelFoldersDto
 import com.mateof.tfm.data.model.CreateFolderRequest
 import com.mateof.tfm.data.model.FolderContentsDto
 import com.mateof.tfm.data.model.LocalDeleteRequest
@@ -29,6 +30,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -49,7 +52,9 @@ data class LocalUiState(
     val selection: Set<String> = emptySet(),
     val busy: Boolean = false,
     val snackbar: String? = null,
-    val savedChannels: List<ChannelDto>? = null
+    val savedChannels: List<ChannelDto>? = null,
+    val channelPickerFolders: ChannelFoldersDto? = null,
+    val channelPickerSearch: String = ""
 )
 
 @HiltViewModel
@@ -195,12 +200,40 @@ class LocalViewModel @Inject constructor(
 
     // ------------------------------------------------------ upload to channel
 
+    /**
+     * Loads the indexed channels + their Telegram folder mapping in parallel so
+     * the upload picker can render them grouped, matching the main screen.
+     */
     fun loadSavedChannels() {
+        _state.value = _state.value.copy(channelPickerSearch = "")
         viewModelScope.launch {
-            runCatching { apiCall { channelsApi.list(onlySaved = true, pageSize = 200) } }
-                .onSuccess { _state.value = _state.value.copy(savedChannels = it) }
-                .onFailure { e -> notify(e.userMessage()) }
+            val savedDeferred = async {
+                runCatching {
+                    apiCall { channelsApi.list(onlySaved = true, pageSize = 200) }
+                }
+            }
+            val foldersDeferred = async {
+                runCatching { apiCall { channelsApi.folders() } }
+            }
+            val (saved, folders) = awaitAll(savedDeferred, foldersDeferred)
+            @Suppress("UNCHECKED_CAST")
+            val savedResult = saved as Result<List<ChannelDto>>
+            @Suppress("UNCHECKED_CAST")
+            val foldersResult = folders as Result<ChannelFoldersDto>
+
+            savedResult.onSuccess { list ->
+                _state.value = _state.value.copy(savedChannels = list)
+            }.onFailure { e -> notify(e.userMessage()) }
+
+            // Missing folders isn't fatal: the picker degrades to a flat list.
+            foldersResult.onSuccess { data ->
+                _state.value = _state.value.copy(channelPickerFolders = data)
+            }
         }
+    }
+
+    fun setChannelPickerSearch(text: String) {
+        _state.value = _state.value.copy(channelPickerSearch = text)
     }
 
     fun uploadToChannel(paths: List<String>, channel: ChannelDto, targetPath: String) {

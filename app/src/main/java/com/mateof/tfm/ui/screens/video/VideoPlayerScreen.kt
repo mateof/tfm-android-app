@@ -31,9 +31,12 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.ui.PlayerView
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import androidx.navigation.NavHostController
 import com.mateof.tfm.data.prefs.ServerPreferences
 import com.mateof.tfm.playback.PlayerConnection
@@ -65,9 +68,19 @@ class VideoPlayerViewModel @Inject constructor(
                 val key = prefs.current.apiKey
                 if (key.isNotBlank()) setDefaultRequestProperties(mapOf("X-Api-Key" to key))
             }
-        player = ExoPlayer.Builder(context)
+        // NextRenderersFactory adds FFmpeg software decoders. EXTENSION_RENDERER_MODE_ON
+        // keeps hardware decoders first (H.264/HEVC/VP9) and falls back to FFmpeg for
+        // codecs the device can't handle (Xvid/DivX video, AC3/EAC3/DTS audio, …),
+        // so MKV/AVI/etc. play regardless of the codecs inside.
+        val renderersFactory = NextRenderersFactory(context)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+        // Broaden container sniffing (constant-bitrate seek for AVI/MP3, etc.).
+        val extractorsFactory = DefaultExtractorsFactory()
+            .setConstantBitrateSeekingEnabled(true)
+        player = ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpFactory))
+                DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpFactory), extractorsFactory)
             )
             .build()
         player.setMediaItem(

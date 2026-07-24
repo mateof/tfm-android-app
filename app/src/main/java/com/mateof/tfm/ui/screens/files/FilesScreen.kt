@@ -27,6 +27,9 @@ import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.MovieCreation
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.Search
@@ -99,6 +102,8 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
     var showCreateFolder by rememberSaveable { mutableStateOf(false) }
     var showSearch by rememberSaveable { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
+    var showOverflow by remember { mutableStateOf(false) }
+    var showStrm by rememberSaveable { mutableStateOf(false) }
 
     val pickFiles = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
@@ -191,6 +196,22 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                         )
                         IconButton(onClick = { showCreateFolder = true }) {
                             Icon(Icons.Outlined.CreateNewFolder, "Nueva carpeta")
+                        }
+                        IconButton(onClick = { showOverflow = true }) {
+                            Icon(Icons.Filled.MoreVert, "Más opciones")
+                        }
+                        DropdownMenu(
+                            expanded = showOverflow,
+                            onDismissRequest = { showOverflow = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Exportar .strm de esta carpeta") },
+                                leadingIcon = { Icon(Icons.Outlined.MovieCreation, null) },
+                                onClick = {
+                                    showOverflow = false
+                                    showStrm = true
+                                }
+                            )
                         }
                     }
                 )
@@ -441,6 +462,17 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
         )
     }
 
+    if (showStrm) {
+        ExportStrmDialog(
+            folderPath = state.contents?.currentPath ?: vm.path,
+            onExport = { destination ->
+                vm.exportStrm(destination)
+                showStrm = false
+            },
+            onDismiss = { showStrm = false }
+        )
+    }
+
     playlistFor?.let { file ->
         AlertDialog(
             onDismissRequest = { playlistFor = null },
@@ -469,6 +501,77 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
             }
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExportStrmDialog(
+    folderPath: String,
+    onExport: (destinationFolder: String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var toLocal by rememberSaveable { mutableStateOf(false) }
+    var destination by rememberSaveable { mutableStateOf("/strm/") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Exportar .strm") },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                Text(
+                    "Carpeta: $folderPath",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                ListItem(
+                    headlineContent = { Text("Descargar como ZIP") },
+                    supportingContent = { Text("Se descarga en el dispositivo") },
+                    leadingContent = { Icon(Icons.Outlined.FileDownload, null) },
+                    trailingContent = {
+                        androidx.compose.material3.RadioButton(
+                            selected = !toLocal,
+                            onClick = { toLocal = false }
+                        )
+                    },
+                    modifier = Modifier.clickable { toLocal = false }
+                )
+                ListItem(
+                    headlineContent = { Text("Guardar en el servidor") },
+                    supportingContent = { Text("Los .strm quedan en el almacenamiento local del servidor") },
+                    leadingContent = { Icon(Icons.Outlined.FolderOpen, null) },
+                    trailingContent = {
+                        androidx.compose.material3.RadioButton(
+                            selected = toLocal,
+                            onClick = { toLocal = true }
+                        )
+                    },
+                    modifier = Modifier.clickable { toLocal = true }
+                )
+                if (toLocal) {
+                    OutlinedTextField(
+                        value = destination,
+                        onValueChange = { destination = it },
+                        label = { Text("Carpeta destino en el servidor") },
+                        placeholder = { Text("/strm/") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !toLocal || destination.isNotBlank(),
+                onClick = { onExport(if (toLocal) destination else null) }
+            ) { Text(if (toLocal) "Exportar" else "Descargar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
 }
 
 @Composable

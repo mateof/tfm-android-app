@@ -15,8 +15,8 @@ android {
         applicationId = "com.mateof.tfm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -112,6 +112,9 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.media3.session)
     implementation(libs.media3.datasource.okhttp)
+    // FFmpeg software decoders + extractors for MKV/AVI and codecs the device
+    // lacks (Xvid/DivX, AC3/EAC3/DTS, etc.).
+    implementation(libs.nextlib.media3ext)
 
     // Images
     implementation(libs.coil.compose)

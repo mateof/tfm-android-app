@@ -424,6 +424,28 @@ data class AddTrackRequest(
 )
 
 // ---------------------------------------------------------------------------
+// Shares / STRM
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class SharedCollectionDto(
+    val id: String = "",
+    val name: String? = null,
+    val description: String? = null,
+    val channelId: String? = null,
+    val collectionId: String? = null,
+    val dateCreated: String? = null,
+    val dateModified: String? = null
+)
+
+@Serializable
+data class CreateStrmRequest(
+    val path: String = "/",
+    val host: String? = null,
+    val destinationFolder: String? = null
+)
+
+// ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 

@@ -10,11 +10,13 @@ import com.mateof.tfm.core.apiCallPaged
 import com.mateof.tfm.core.userMessage
 import com.mateof.tfm.data.api.FilesApi
 import com.mateof.tfm.data.api.PlaylistsApi
+import com.mateof.tfm.data.api.SharesApi
 import com.mateof.tfm.data.api.TransfersApi
 import com.mateof.tfm.data.model.AddTrackRequest
 import com.mateof.tfm.data.model.ApiFileDto
 import com.mateof.tfm.data.model.CopyMoveRequest
 import com.mateof.tfm.data.model.CreateFolderRequest
+import com.mateof.tfm.data.model.CreateStrmRequest
 import com.mateof.tfm.data.model.FolderContentsDto
 import com.mateof.tfm.data.model.IdsRequest
 import com.mateof.tfm.data.model.PlaylistDto
@@ -69,6 +71,7 @@ class FilesViewModel @Inject constructor(
     private val channelsApi: com.mateof.tfm.data.api.ChannelsApi,
     private val transfersApi: TransfersApi,
     private val playlistsApi: PlaylistsApi,
+    private val sharesApi: SharesApi,
     private val mediaUrls: MediaUrls,
     private val player: PlayerConnection,
     private val downloader: DeviceDownloader,
@@ -335,6 +338,51 @@ class FilesViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    // ------------------------------------------------------------------ strm
+
+    /**
+     * Generates .strm files for the current folder.
+     *
+     * When [destinationFolder] is null, the server prepares a ZIP and returns
+     * its relative URL; we hand it to the system download manager. When it is
+     * set, .strm files are written under that path in the server local root.
+     */
+    fun exportStrm(destinationFolder: String?) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true)
+            runCatching {
+                apiCall {
+                    sharesApi.createStrm(
+                        channelId = channelId,
+                        body = CreateStrmRequest(
+                            path = currentPath,
+                            destinationFolder = destinationFolder?.ifBlank { null }
+                        )
+                    )
+                }
+            }.onSuccess { result ->
+                _state.value = _state.value.copy(busy = false)
+                if (destinationFolder.isNullOrBlank()) {
+                    val ok = downloader.download(result, strmZipName())
+                    notify(
+                        if (ok) "Descargando ZIP con .strm en el dispositivo"
+                        else "STRM listo, pero no se pudo iniciar la descarga (URL: $result)"
+                    )
+                } else {
+                    notify("Ficheros .strm escritos en «$result»")
+                }
+            }.onFailure { e ->
+                _state.value = _state.value.copy(busy = false)
+                notify(e.userMessage())
+            }
+        }
+    }
+
+    private fun strmZipName(): String {
+        val slug = currentPath.trim('/').replace('/', '_').ifBlank { "root" }
+        return "strm-${channelName.ifBlank { channelId }}-$slug.zip"
     }
 
     // -------------------------------------------------------------- playback
