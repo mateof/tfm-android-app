@@ -68,14 +68,18 @@ private fun rememberFilesApi(): FilesApi {
 /**
  * Lets the user navigate the folder tree of [channelId] and pick a destination
  * path (only folders are shown). Returns the chosen path (e.g. `/music/rock/`)
- * via [onPick].
+ * via [onPick]. [title], [subtitle] and [confirmLabel] can be overridden so the
+ * same picker fits upload, copy and move flows.
  */
 @Composable
 fun ChannelFolderPicker(
     channelId: String,
     channelName: String,
     onPick: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    title: String = "Subir a «$channelName»",
+    subtitle: String = "Elige la carpeta destino",
+    confirmLabel: String = "Subir aquí"
 ) {
     val filesApi = rememberFilesApi()
     val scope = rememberCoroutineScope()
@@ -129,9 +133,9 @@ fun ChannelFolderPicker(
         onDismissRequest = onDismiss,
         title = {
             Column {
-                Text("Subir a «$channelName»", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    "Elige la carpeta destino",
+                    subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -208,7 +212,7 @@ fun ChannelFolderPicker(
         },
         confirmButton = {
             Button(onClick = { onPick(path) }) {
-                Text("Subir aquí")
+                Text(confirmLabel)
             }
         },
         dismissButton = {

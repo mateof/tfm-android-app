@@ -476,12 +476,16 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
     }
 
     copyMoveFor?.let { (ids, move) ->
-        InputDialog(
-            title = if (move) "Mover a carpeta" else "Copiar a carpeta",
-            label = "Ruta destino (p. ej. /backup/)",
-            initialValue = "/",
-            confirmLabel = if (move) "Mover" else "Copiar",
-            onConfirm = { vm.copyOrMove(ids, it, move) },
+        com.mateof.tfm.ui.components.ChannelFolderPicker(
+            channelId = state.channelId,
+            channelName = state.channelName,
+            title = if (move) "Mover a…" else "Copiar a…",
+            subtitle = "Navega hasta la carpeta destino",
+            confirmLabel = if (move) "Mover aquí" else "Copiar aquí",
+            onPick = { targetPath ->
+                vm.copyOrMove(ids, targetPath, move)
+                copyMoveFor = null
+            },
             onDismiss = { copyMoveFor = null }
         )
     }
