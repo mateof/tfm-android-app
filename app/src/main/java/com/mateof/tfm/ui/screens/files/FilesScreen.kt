@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -36,6 +35,7 @@ import androidx.compose.material.icons.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Sort
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -46,6 +46,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -232,6 +233,15 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                             onDismissRequest = { showOverflow = false }
                         ) {
                             DropdownMenuItem(
+                                text = { Text("Actualizar índice del canal…") },
+                                leadingIcon = { Icon(Icons.Outlined.Sync, null) },
+                                enabled = !state.scanning,
+                                onClick = {
+                                    showOverflow = false
+                                    showScanOptions = true
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Exportar .strm de esta carpeta") },
                                 leadingIcon = { Icon(Icons.Outlined.MovieCreation, null) },
                                 onClick = {
@@ -307,6 +317,30 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
                             )
                         }
                     }
+                }
+            }
+
+            if (state.scanning) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Indexando el canal en segundo plano… la lista se irá actualizando.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+
+            if (state.scanning) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Indexando el canal en segundo plano… la lista se irá actualizando.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
             }
 
@@ -525,9 +559,13 @@ fun FilesScreen(navController: NavHostController, vm: FilesViewModel = hiltViewM
     }
 
     if (showScanOptions) {
-        ScanOptionsDialog(
+        com.mateof.tfm.ui.components.ScanOptionsDialog(
+            channelName = state.channelName,
+            title = if (state.needsIndex) "Escanear canal" else "Actualizar índice",
+            confirmLabel = if (state.needsIndex) "Escanear" else "Actualizar",
+            initial = state.scanOptions,
             onConfirm = { options ->
-                vm.createIndexAndScan(options)
+                vm.scanChannel(options)
                 showScanOptions = false
             },
             onDismiss = { showScanOptions = false }
@@ -657,68 +695,6 @@ private fun ExportStrmDialog(
             },
             onDismiss = { showFolderPicker = false }
         )
-    }
-}
-
-@Composable
-private fun ScanOptionsDialog(
-    onConfirm: (com.mateof.tfm.data.model.RefreshChannelRequest) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var includeVideo by rememberSaveable { mutableStateOf(true) }
-    var includeAudio by rememberSaveable { mutableStateOf(true) }
-    var includePhotos by rememberSaveable { mutableStateOf(true) }
-    var includeDocuments by rememberSaveable { mutableStateOf(true) }
-    val anySelected = includeVideo || includeAudio || includePhotos || includeDocuments
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Escanear canal") },
-        text = {
-            Column {
-                Text(
-                    "Elige qué tipos de contenido quieres indexar.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                ScanCheckbox("Vídeo", includeVideo) { includeVideo = it }
-                ScanCheckbox("Audio", includeAudio) { includeAudio = it }
-                ScanCheckbox("Fotos", includePhotos) { includePhotos = it }
-                ScanCheckbox("Documentos", includeDocuments) { includeDocuments = it }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = anySelected,
-                onClick = {
-                    onConfirm(
-                        com.mateof.tfm.data.model.RefreshChannelRequest(
-                            includeDocuments = includeDocuments,
-                            includeAudio = includeAudio,
-                            includeVideo = includeVideo,
-                            includePhotos = includePhotos
-                        )
-                    )
-                }
-            ) { Text("Escanear") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
-    )
-}
-
-@Composable
-private fun ScanCheckbox(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-    ) {
-        androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-        Spacer(Modifier.width(8.dp))
-        Text(label)
     }
 }
 

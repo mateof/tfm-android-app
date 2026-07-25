@@ -113,6 +113,7 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
     var showCreate by rememberSaveable { mutableStateOf(false) }
     var showJoin by rememberSaveable { mutableStateOf(false) }
     var leaveFor by remember { mutableStateOf<ChannelDto?>(null) }
+    var scanFor by remember { mutableStateOf<ChannelDto?>(null) }
     var shareActionsFor by remember { mutableStateOf<SharedCollectionDto?>(null) }
     var deleteShareFor by remember { mutableStateOf<SharedCollectionDto?>(null) }
 
@@ -260,23 +261,19 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
                     )
                 }
             )
-            if (channel.hasDatabase) {
-                ListItem(
-                    headlineContent = { Text("Actualizar índice (buscar nuevos ficheros)") },
-                    leadingContent = { Icon(Icons.Outlined.Refresh, null) },
-                    modifier = Modifier.clickable {
-                        vm.refreshChannel(channel); actionsFor = null
-                    }
-                )
-            } else {
-                ListItem(
-                    headlineContent = { Text("Crear índice local (guardar canal)") },
-                    leadingContent = { Icon(Icons.Outlined.Dns, null) },
-                    modifier = Modifier.clickable {
-                        vm.createDatabase(channel); actionsFor = null
-                    }
-                )
-            }
+            ListItem(
+                headlineContent = {
+                    Text(
+                        if (channel.hasDatabase) "Actualizar índice (buscar nuevos ficheros)"
+                        else "Crear índice local (guardar canal)"
+                    )
+                },
+                supportingContent = { Text("Elige qué tipos de contenido indexar") },
+                leadingContent = {
+                    Icon(if (channel.hasDatabase) Icons.Outlined.Refresh else Icons.Outlined.Dns, null)
+                },
+                modifier = Modifier.clickable { scanFor = channel; actionsFor = null }
+            )
             ListItem(
                 headlineContent = {
                     Text(if (channel.isFavorite) "Quitar de favoritos" else "Añadir a favoritos")
@@ -393,6 +390,22 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
             confirmLabel = "Unirse",
             onConfirm = vm::joinByHash,
             onDismiss = { showJoin = false }
+        )
+    }
+
+    scanFor?.let { channel ->
+        com.mateof.tfm.ui.components.ScanOptionsDialog(
+            channelName = channel.name,
+            title = if (channel.hasDatabase) "Actualizar índice" else "Crear índice y escanear",
+            confirmLabel = if (channel.hasDatabase) "Actualizar" else "Crear y escanear",
+            initial = state.scanOptions,
+            // A brand new index has nothing to skip, so a full scan is implicit.
+            showForce = channel.hasDatabase,
+            onConfirm = { options ->
+                vm.scanChannel(channel, options)
+                scanFor = null
+            },
+            onDismiss = { scanFor = null }
         )
     }
 

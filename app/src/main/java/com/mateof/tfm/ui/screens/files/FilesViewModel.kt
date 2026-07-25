@@ -5,7 +5,9 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mateof.tfm.core.ApiException
 import com.mateof.tfm.core.apiCall
+import com.mateof.tfm.core.apiCallNullable
 import com.mateof.tfm.core.apiCallPaged
 import com.mateof.tfm.core.userMessage
 import com.mateof.tfm.data.api.FilesApi
@@ -20,8 +22,10 @@ import com.mateof.tfm.data.model.CreateStrmRequest
 import com.mateof.tfm.data.model.FolderContentsDto
 import com.mateof.tfm.data.model.IdsRequest
 import com.mateof.tfm.data.model.PlaylistDto
+import com.mateof.tfm.data.model.RefreshChannelRequest
 import com.mateof.tfm.data.model.RenameFileRequest
 import com.mateof.tfm.data.model.StartDownloadsRequest
+import com.mateof.tfm.data.prefs.ServerPreferences
 import com.mateof.tfm.data.repo.MediaUrls
 import com.mateof.tfm.playback.PlayerConnection
 import com.mateof.tfm.playback.QueueTrack
@@ -35,6 +39,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -63,7 +68,12 @@ data class FilesUiState(
     val playlists: List<PlaylistDto>? = null,
     // True when the channel has no local index yet, so browsing has nothing
     // to show; the screen offers to create + scan it.
-    val needsIndex: Boolean = false
+    val needsIndex: Boolean = false,
+    // A background scan of the channel is running on the server (started from
+    // here, from another client or from the web).
+    val scanning: Boolean = false,
+    // Media types picked the last time the user scanned a channel.
+    val scanOptions: RefreshChannelRequest = RefreshChannelRequest()
 )
 
 @HiltViewModel
@@ -79,6 +89,7 @@ class FilesViewModel @Inject constructor(
     private val downloader: DeviceDownloader,
     private val externalOpener: ExternalOpener,
     private val videoPlayers: VideoPlayers,
+    private val prefs: ServerPreferences,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -95,9 +106,18 @@ class FilesViewModel @Inject constructor(
     private val uploadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var loadJob: Job? = null
+    private var scanJob: Job? = null
 
     init {
         load()
+        viewModelScope.launch {
+            prefs.scanOptions.collect { options ->
+                _state.value = _state.value.copy(scanOptions = options)
+            }
+        }
+        // A scan may already be running (started from the web or another
+        // screen); pick it up so the banner and the auto-reload work.
+        watchScan(announceStart = false)
     }
 
     val path: String get() = currentPath
@@ -178,22 +198,98 @@ class FilesViewModel @Inject constructor(
         }
     }
 
-    /** Create the channel's local index and kick off a scan, then reload. */
-    fun createIndexAndScan(
-        options: com.mateof.tfm.data.model.RefreshChannelRequest =
-            com.mateof.tfm.data.model.RefreshChannelRequest()
-    ) {
+    /**
+     * Indexes the channel: makes sure the local index exists and asks the
+     * server to scan Telegram for the selected media types. The scan runs in
+     * the background, so we poll its state and reload as it progresses.
+     */
+    fun scanChannel(options: RefreshChannelRequest = _state.value.scanOptions) {
         viewModelScope.launch {
+            val creating = _state.value.needsIndex
             _state.value = _state.value.copy(busy = true)
-            // Ignore "already exists" — we just want to guarantee the index.
-            runCatching { apiCall { channelsApi.createDatabase(channelId) } }
-            runCatching { apiCall { channelsApi.refresh(channelId, options) } }
+            prefs.saveScanOptions(options)
+            if (creating) {
+                // Ignore "already exists" — we just want to guarantee the index.
+                runCatching { apiCall { channelsApi.createDatabase(channelId) } }
+            }
+            runCatching { apiCallNullable { channelsApi.refresh(channelId, options) } }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        needsIndex = false,
+                        scanning = true,
+                        snackbar = if (creating) {
+                            "Índice creado; escaneando el canal en segundo plano"
+                        } else {
+                            "Escaneando el canal en segundo plano"
+                        }
+                    )
+                    watchScan(announceStart = true)
+                    load()
+                }
+                .onFailure { e ->
+                    // The server refuses a second scan while one is running;
+                    // that is not an error for us, just follow the running one.
+                    val running = (e as? ApiException)?.code == "already_running"
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        needsIndex = _state.value.needsIndex && !running,
+                        scanning = running,
+                        snackbar = if (running) "Ya hay un escaneo en curso" else e.userMessage()
+                    )
+                    if (running) watchScan(announceStart = true)
+                }
+        }
+    }
+
+    /**
+     * Polls the channel's refresh state until the background scan finishes and
+     * reloads the listing meanwhile, so newly indexed files show up.
+     *
+     * With [announceStart] false it stays quiet unless the server reports a
+     * scan already in flight, which is what makes an ongoing web-side refresh
+     * visible when the screen opens.
+     */
+    private fun watchScan(announceStart: Boolean) {
+        scanJob?.cancel()
+        scanJob = viewModelScope.launch {
+            var sawRunning = false
+            var failures = 0
+            var polls = 0
+            var finished = false
+            while (polls < MAX_SCAN_POLLS) {
+                delay(SCAN_POLL_MS)
+                polls++
+                val running = runCatching { apiCall { channelsApi.isRefreshing(channelId) } }
+                    .getOrNull()
+                if (running == null) {
+                    // Transient network hiccups are common on a long scan;
+                    // only stop watching after several in a row.
+                    if (++failures >= MAX_SCAN_FAILURES) break
+                    continue
+                }
+                failures = 0
+                if (running) {
+                    sawRunning = true
+                    if (!_state.value.scanning) {
+                        _state.value = _state.value.copy(scanning = true)
+                    }
+                    // Show what has been indexed so far without user action.
+                    if (polls % RELOAD_EVERY_POLLS == 0) load()
+                } else {
+                    // Nothing running and nothing was: the screen just opened
+                    // on an idle channel, so say nothing at all.
+                    if (!sawRunning && !announceStart) return@launch
+                    finished = true
+                    break
+                }
+            }
             _state.value = _state.value.copy(
-                busy = false,
-                needsIndex = false,
-                snackbar = "Índice creado; escaneando el canal en segundo plano (ver Transfers)"
+                scanning = false,
+                needsIndex = if (finished) false else _state.value.needsIndex,
+                snackbar = if (finished) "Escaneo del canal terminado" else _state.value.snackbar
             )
-            load()
+            if (finished) load()
         }
     }
 
@@ -495,6 +591,20 @@ class FilesViewModel @Inject constructor(
 
     fun snackbarShown() {
         _state.value = _state.value.copy(snackbar = null)
+    }
+
+    private companion object {
+        /** How often the background scan state is polled. */
+        const val SCAN_POLL_MS = 4_000L
+
+        /** Reload the listing every N polls while the scan runs (~30 s). */
+        const val RELOAD_EVERY_POLLS = 8
+
+        /** Give up watching after ~2 hours; a scan that long is stuck anyway. */
+        const val MAX_SCAN_POLLS = 1_800
+
+        /** Consecutive polling errors (server down, no network) before giving up. */
+        const val MAX_SCAN_FAILURES = 3
     }
 }
 

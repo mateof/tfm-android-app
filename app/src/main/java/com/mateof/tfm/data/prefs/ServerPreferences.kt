@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.mateof.tfm.data.model.RefreshChannelRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,10 @@ class ServerPreferences @Inject constructor(
         val API_KEY = stringPreferencesKey("api_key")
         val CONFIGURED = booleanPreferencesKey("configured")
         val VIDEO_PLAYER = stringPreferencesKey("video_player")
+        val SCAN_DOCUMENTS = booleanPreferencesKey("scan_documents")
+        val SCAN_AUDIO = booleanPreferencesKey("scan_audio")
+        val SCAN_VIDEO = booleanPreferencesKey("scan_video")
+        val SCAN_PHOTOS = booleanPreferencesKey("scan_photos")
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -87,6 +92,31 @@ class ServerPreferences @Inject constructor(
 
     suspend fun saveVideoPlayer(value: String) {
         context.dataStore.edit { p -> p[Keys.VIDEO_PLAYER] = value }
+    }
+
+    /**
+     * Media types picked the last time a channel was scanned, so the dialog
+     * opens with the user's usual choice. `force` is never remembered: a full
+     * rescan has to be asked for explicitly every time.
+     */
+    val scanOptions: StateFlow<RefreshChannelRequest> = context.dataStore.data
+        .map { p ->
+            RefreshChannelRequest(
+                includeDocuments = p[Keys.SCAN_DOCUMENTS] ?: true,
+                includeAudio = p[Keys.SCAN_AUDIO] ?: true,
+                includeVideo = p[Keys.SCAN_VIDEO] ?: true,
+                includePhotos = p[Keys.SCAN_PHOTOS] ?: true
+            )
+        }
+        .stateIn(scope, SharingStarted.Eagerly, RefreshChannelRequest())
+
+    suspend fun saveScanOptions(options: RefreshChannelRequest) {
+        context.dataStore.edit { p ->
+            p[Keys.SCAN_DOCUMENTS] = options.includeDocuments
+            p[Keys.SCAN_AUDIO] = options.includeAudio
+            p[Keys.SCAN_VIDEO] = options.includeVideo
+            p[Keys.SCAN_PHOTOS] = options.includePhotos
+        }
     }
 
     suspend fun awaitLoaded(): ServerConfig = configFlow.first()

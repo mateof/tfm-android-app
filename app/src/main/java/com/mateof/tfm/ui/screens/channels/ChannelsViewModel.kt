@@ -2,7 +2,9 @@ package com.mateof.tfm.ui.screens.channels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mateof.tfm.core.ApiException
 import com.mateof.tfm.core.apiCall
+import com.mateof.tfm.core.apiCallNullable
 import com.mateof.tfm.core.apiCallPaged
 import com.mateof.tfm.core.userMessage
 import com.mateof.tfm.data.api.ChannelsApi
@@ -15,6 +17,7 @@ import com.mateof.tfm.data.model.LeaveChannelRequest
 import com.mateof.tfm.data.model.RefreshChannelRequest
 import com.mateof.tfm.data.model.SharedCollectionDto
 import com.mateof.tfm.data.model.StartDownloadsRequest
+import com.mateof.tfm.data.prefs.ServerPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -54,7 +57,9 @@ data class ChannelsUiState(
     // Ids of channels that have a local index. Populated on every load and
     // used to mark rows with the "indexed" badge — the server's plain
     // channels list does not carry that flag.
-    val savedIds: Set<Long> = emptySet()
+    val savedIds: Set<Long> = emptySet(),
+    // Media types picked the last time the user scanned a channel.
+    val scanOptions: RefreshChannelRequest = RefreshChannelRequest()
 )
 
 @OptIn(FlowPreview::class)
@@ -62,7 +67,8 @@ data class ChannelsUiState(
 class ChannelsViewModel @Inject constructor(
     private val api: ChannelsApi,
     private val sharesApi: SharesApi,
-    private val transfersApi: TransfersApi
+    private val transfersApi: TransfersApi,
+    private val prefs: ServerPreferences
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChannelsUiState())
@@ -75,6 +81,11 @@ class ChannelsViewModel @Inject constructor(
         load()
         viewModelScope.launch {
             searchInput.drop(1).debounce(400).distinctUntilChanged().collect { load() }
+        }
+        viewModelScope.launch {
+            prefs.scanOptions.collect { options ->
+                _state.value = _state.value.copy(scanOptions = options)
+            }
         }
     }
 
@@ -235,28 +246,38 @@ class ChannelsViewModel @Inject constructor(
         }
     }
 
-    fun refreshChannel(channel: ChannelDto) {
-        viewModelScope.launch {
-            runCatching { apiCall { api.refresh(channel.id.toString(), RefreshChannelRequest()) } }
-                .onSuccess {
-                    _state.value = _state.value.copy(
-                        snackbar = "Indexando «${channel.name}» en segundo plano"
-                    )
-                }
-                .onFailure { e -> _state.value = _state.value.copy(snackbar = e.userMessage()) }
-        }
-    }
-
-    fun createDatabase(channel: ChannelDto) {
+    /**
+     * Asks the server to scan the channel on Telegram and index the selected
+     * media types. Creates the local index first when the channel has none, so
+     * a single action covers both "save this channel" and "look for new files".
+     */
+    fun scanChannel(channel: ChannelDto, options: RefreshChannelRequest) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true)
-            runCatching { apiCall { api.createDatabase(channel.id.toString()) } }
+            prefs.saveScanOptions(options)
+            if (!channel.hasDatabase) {
+                // Ignore "already exists": we only want to guarantee the index.
+                runCatching { apiCall { api.createDatabase(channel.id.toString()) } }
+            }
+            runCatching { apiCallNullable { api.refresh(channel.id.toString(), options) } }
                 .onSuccess {
-                    _state.value = _state.value.copy(busy = false, snackbar = "Índice creado")
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        snackbar = "Indexando «${channel.name}» en segundo plano"
+                    )
                     load()
                 }
                 .onFailure { e ->
-                    _state.value = _state.value.copy(busy = false, snackbar = e.userMessage())
+                    val running = (e as? ApiException)?.code == "already_running"
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        snackbar = if (running) {
+                            "«${channel.name}» ya se está indexando"
+                        } else {
+                            e.userMessage()
+                        }
+                    )
+                    if (running) load()
                 }
         }
     }

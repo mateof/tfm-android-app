@@ -14,6 +14,11 @@ through the server's REST API v1 + SignalR hub.
 - **Channels**: saved / all / favorites, search, details with statistics,
   create channel, join by invitation, create/refresh index, recent messages
   with direct attachment download, leave channel.
+- **Re-index a channel** from the app, like the web does: pick which media
+  types to fetch (video, audio, photos, documents), optionally force a full
+  rescan instead of only the messages after the last indexed one. The scan
+  runs on the server; the file browser shows a progress banner, polls its
+  state and reloads as new files land. The chosen types are remembered.
 - **Channel file browser**: breadcrumb navigation, type filters, sorting,
   recursive search, multi-select, create folder, rename, copy/move, delete,
   **upload files from the device** and download **to the server** (managed

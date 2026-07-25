@@ -65,8 +65,10 @@ interface ChannelsApi {
     @POST("api/v1/channels/{id}/leave")
     suspend fun leave(@Path("id") id: String, @Body body: LeaveChannelRequest): ApiEnvelope<Boolean>
 
+    // 202 Accepted with an empty payload: the scan runs in the background and
+    // its state is polled through [isRefreshing].
     @POST("api/v1/channels/{id}/refresh")
-    suspend fun refresh(@Path("id") id: String, @Body body: RefreshChannelRequest): ApiEnvelope<Boolean>
+    suspend fun refresh(@Path("id") id: String, @Body body: RefreshChannelRequest): ApiEnvelope<Unit>
 
     @GET("api/v1/channels/{id}/refresh")
     suspend fun isRefreshing(@Path("id") id: String): ApiEnvelope<Boolean>
