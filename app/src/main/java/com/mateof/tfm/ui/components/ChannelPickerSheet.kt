@@ -151,6 +151,7 @@ fun ChannelPickerSheet(
                     .onFailure { foldersState = FoldersDataState(error = it.userMessage()) }
             }
             ChannelsTab.SHARED -> loadShares(deps.sharesApi(), effectiveQuery, listState)
+            ChannelsTab.HIDDEN -> Unit // not offered here
         }
     }
 
@@ -172,8 +173,11 @@ fun ChannelPickerSheet(
                 .padding(horizontal = 16.dp)
         )
         Spacer(Modifier.height(8.dp))
-        ScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 8.dp) {
-            ChannelsTab.entries.forEach { t ->
+        // "Ocultos" is a management view, not a place to pick a destination:
+        // a hidden channel is meant to stay out of the way.
+        val tabs = ChannelsTab.entries.filter { it != ChannelsTab.HIDDEN }
+        ScrollableTabRow(selectedTabIndex = tabs.indexOf(tab), edgePadding = 8.dp) {
+            tabs.forEach { t ->
                 Tab(
                     selected = tab == t,
                     onClick = { tab = t },

@@ -34,6 +34,9 @@ interface ChannelsApi {
     suspend fun list(
         @Query("onlySaved") onlySaved: Boolean = false,
         @Query("favoritesOnly") favoritesOnly: Boolean = false,
+        // Hidden channels are filtered out server-side according to the global
+        // "show hidden channels" setting; this forces them in regardless.
+        @Query("includeHidden") includeHidden: Boolean = false,
         @Query("search") search: String? = null,
         @Query("sortBy") sortBy: String? = null,
         @Query("sortDescending") sortDescending: Boolean = false,
@@ -55,6 +58,16 @@ interface ChannelsApi {
 
     @DELETE("api/v1/channels/{id}/favorite")
     suspend fun removeFavorite(@Path("id") id: String): ApiEnvelope<Boolean>
+
+    /** Hidden channels, listed regardless of the "show hidden" setting. */
+    @GET("api/v1/channels/hidden")
+    suspend fun hidden(): ApiEnvelope<List<ChannelDto>>
+
+    @POST("api/v1/channels/{id}/hidden")
+    suspend fun addHidden(@Path("id") id: String): ApiEnvelope<Unit>
+
+    @DELETE("api/v1/channels/{id}/hidden")
+    suspend fun removeHidden(@Path("id") id: String): ApiEnvelope<Unit>
 
     @POST("api/v1/channels/{id}/database")
     suspend fun createDatabase(@Path("id") id: String): ApiEnvelope<Boolean>

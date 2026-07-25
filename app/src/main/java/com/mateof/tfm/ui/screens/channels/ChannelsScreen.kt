@@ -34,12 +34,15 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -146,6 +149,24 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.weight(1f)
                 )
+                // Server-wide setting, so the icon reflects what every client
+                // sees, not a local preference.
+                val showHidden = state.showHidden == true
+                IconButton(
+                    onClick = { vm.setShowHidden(!showHidden) },
+                    enabled = state.showHidden != null
+                ) {
+                    Icon(
+                        if (showHidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                        contentDescription = if (showHidden) {
+                            "Ocultar los canales marcados como ocultos"
+                        } else {
+                            "Mostrar los canales ocultos"
+                        },
+                        tint = if (showHidden) MaterialTheme.colorScheme.primary
+                        else LocalContentColor.current
+                    )
+                }
                 IconButton(onClick = { showJoin = true }) {
                     Icon(Icons.Outlined.GroupAdd, contentDescription = "Unirse por invitación")
                 }
@@ -201,6 +222,9 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
                     when (state.tab) {
                         ChannelsTab.MINE ->
                             "No eres propietario de ningún canal.\nCrea uno con el botón +."
+                        ChannelsTab.HIDDEN ->
+                            "No has ocultado ningún canal.\n" +
+                                "Usa «Ocultar canal» en el menú de un canal."
                         else -> "Sin resultados"
                     }
                 )
@@ -287,6 +311,28 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
                 modifier = Modifier.clickable { vm.toggleFavorite(channel); actionsFor = null }
             )
             ListItem(
+                headlineContent = {
+                    Text(if (channel.isHidden) "Dejar de ocultar" else "Ocultar canal")
+                },
+                supportingContent = {
+                    Text(
+                        if (channel.isHidden) {
+                            "Volverá a aparecer en todas las listas"
+                        } else {
+                            "Se quita de las listas; lo tendrás en la pestaña Ocultos"
+                        }
+                    )
+                },
+                leadingContent = {
+                    Icon(
+                        if (channel.isHidden) Icons.Outlined.Visibility
+                        else Icons.Outlined.VisibilityOff,
+                        null
+                    )
+                },
+                modifier = Modifier.clickable { vm.toggleHidden(channel); actionsFor = null }
+            )
+            ListItem(
                 headlineContent = { Text("Mensajes recientes") },
                 leadingContent = { Icon(Icons.Outlined.Message, null) },
                 modifier = Modifier.clickable {
@@ -365,6 +411,7 @@ fun ChannelsScreen(navController: NavHostController, vm: ChannelsViewModel = hil
                     DetailLine("Fotos", d.photoCount?.toString() ?: "-")
                     DetailLine("Documentos", d.documentCount?.toString() ?: "-")
                     DetailLine("Indexando ahora", if (d.isRefreshing == true) "Sí" else "No")
+                    DetailLine("Oculto", if (d.isHidden) "Sí" else "No")
                 }
             },
             confirmButton = {
@@ -680,6 +727,15 @@ private fun ChannelRow(
                         Icons.Filled.Star,
                         contentDescription = "Favorito",
                         tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
+                if (channel.isHidden) {
+                    Icon(
+                        Icons.Outlined.VisibilityOff,
+                        contentDescription = "Oculto",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(Modifier.width(4.dp))

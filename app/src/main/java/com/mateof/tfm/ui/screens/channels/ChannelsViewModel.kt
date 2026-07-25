@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import javax.inject.Inject
 
 enum class ChannelsTab(val label: String) {
@@ -34,6 +36,7 @@ enum class ChannelsTab(val label: String) {
     ALL("Todos"),
     FAVORITES("Favoritos"),
     FOLDERS("Carpetas"),
+    HIDDEN("Ocultos"),
     SHARED("Compartidos")
 }
 
@@ -59,7 +62,10 @@ data class ChannelsUiState(
     // channels list does not carry that flag.
     val savedIds: Set<Long> = emptySet(),
     // Media types picked the last time the user scanned a channel.
-    val scanOptions: RefreshChannelRequest = RefreshChannelRequest()
+    val scanOptions: RefreshChannelRequest = RefreshChannelRequest(),
+    // Server-wide setting: when off, hidden channels are filtered out of every
+    // list (the server does the filtering). Null until the config is read.
+    val showHidden: Boolean? = null
 )
 
 @OptIn(FlowPreview::class)
@@ -68,6 +74,7 @@ class ChannelsViewModel @Inject constructor(
     private val api: ChannelsApi,
     private val sharesApi: SharesApi,
     private val transfersApi: TransfersApi,
+    private val configApi: com.mateof.tfm.data.api.ConfigApi,
     private val prefs: ServerPreferences
 ) : ViewModel() {
 
@@ -85,6 +92,69 @@ class ChannelsViewModel @Inject constructor(
         viewModelScope.launch {
             prefs.scanOptions.collect { options ->
                 _state.value = _state.value.copy(scanOptions = options)
+            }
+        }
+    }
+
+    private fun loadShowHidden() {
+        viewModelScope.launch {
+            runCatching { apiCall { configApi.get() } }
+                .onSuccess { c ->
+                    _state.value = _state.value.copy(showHidden = c.showHiddenChannels ?: false)
+                }
+        }
+    }
+
+    /**
+     * Flips the server-wide "show hidden channels" setting. It is shared with
+     * the web, so this changes what every client sees.
+     */
+    fun setShowHidden(value: Boolean) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true)
+            val body = buildJsonObject { put("showHiddenChannels", JsonPrimitive(value)) }
+            runCatching { apiCall { configApi.patch(body) } }
+                .onSuccess { c ->
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        showHidden = c.showHiddenChannels ?: value,
+                        snackbar = if (value) {
+                            "Mostrando también los canales ocultos"
+                        } else {
+                            "Los canales ocultos quedan fuera de las listas"
+                        }
+                    )
+                    load()
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(busy = false, snackbar = e.userMessage())
+                }
+        }
+    }
+
+    /** Hides the channel from the lists, or brings it back. */
+    fun toggleHidden(channel: ChannelDto) {
+        val hide = !channel.isHidden
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true)
+            runCatching {
+                apiCallNullable {
+                    if (hide) api.addHidden(channel.id.toString())
+                    else api.removeHidden(channel.id.toString())
+                }
+            }.onSuccess {
+                _state.value = _state.value.copy(
+                    busy = false,
+                    snackbar = if (hide) {
+                        "«${channel.name}» oculto" +
+                            if (_state.value.showHidden == true) "" else " (ya no aparece en las listas)"
+                    } else {
+                        "«${channel.name}» visible de nuevo"
+                    }
+                )
+                load()
+            }.onFailure { e ->
+                _state.value = _state.value.copy(busy = false, snackbar = e.userMessage())
             }
         }
     }
@@ -109,10 +179,16 @@ class ChannelsViewModel @Inject constructor(
                 loadingMore = more,
                 error = if (more) s.error else null
             )
-            if (!more) refreshSavedIds()
+            if (!more) {
+                refreshSavedIds()
+                // The setting is server-wide and can change from Settings or
+                // from the web, so re-read it whenever the list reloads.
+                loadShowHidden()
+            }
             when (s.tab) {
                 ChannelsTab.FOLDERS -> loadFolders(s)
                 ChannelsTab.SHARED -> loadShares(s)
+                ChannelsTab.HIDDEN -> loadHidden(s)
                 else -> loadChannelList(s, more)
             }
         }
@@ -125,7 +201,9 @@ class ChannelsViewModel @Inject constructor(
      */
     private suspend fun refreshSavedIds() {
         runCatching {
-            apiCall { api.list(onlySaved = true, pageSize = 500) }
+            // includeHidden so a hidden channel still gets its "indexed" badge
+            // in the Ocultos tab.
+            apiCall { api.list(onlySaved = true, includeHidden = true, pageSize = 500) }
         }.onSuccess { list ->
             _state.value = _state.value.copy(savedIds = list.map { it.id }.toSet())
         }
@@ -207,6 +285,35 @@ class ChannelsViewModel @Inject constructor(
             ungrouped = ungrouped,
             totalChannels = folders.sumOf { it.channelCount } + ungrouped.size
         )
+    }
+
+    /**
+     * The hidden channels, from the dedicated endpoint so they can be unhidden
+     * even while the "show hidden channels" setting keeps them out of every
+     * other list. Filtering is local: the endpoint takes no search parameter.
+     */
+    private suspend fun loadHidden(s: ChannelsUiState) {
+        runCatching { apiCall { api.hidden() } }
+            .onSuccess { list ->
+                val query = s.search.trim()
+                val items = markIndexed(
+                    if (query.isBlank()) list
+                    else list.filter { it.name?.contains(query, ignoreCase = true) == true }
+                )
+                _state.value = _state.value.copy(
+                    loading = false,
+                    loadingMore = false,
+                    channels = items,
+                    page = 1,
+                    hasNext = false
+                )
+            }
+            .onFailure { e ->
+                if (e is kotlinx.coroutines.CancellationException) return@onFailure
+                _state.value = _state.value.copy(
+                    loading = false, loadingMore = false, error = e.userMessage()
+                )
+            }
     }
 
     private suspend fun loadShares(s: ChannelsUiState) {

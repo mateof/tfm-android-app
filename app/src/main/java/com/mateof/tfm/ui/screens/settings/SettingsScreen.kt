@@ -164,7 +164,8 @@ class SettingsViewModel @Inject constructor(
         maxSimultaneousDownloads: Int?,
         parallelTransfers: Int?,
         downloadConnections: Int?,
-        checkHash: Boolean?
+        checkHash: Boolean?,
+        showHiddenChannels: Boolean?
     ) {
         viewModelScope.launch {
             _state.value = _state.value.copy(saving = true)
@@ -173,6 +174,7 @@ class SettingsViewModel @Inject constructor(
                 parallelTransfers?.let { put("parallelTransfers", JsonPrimitive(it)) }
                 downloadConnections?.let { put("downloadConnections", JsonPrimitive(it)) }
                 checkHash?.let { put("checkHash", JsonPrimitive(it)) }
+                showHiddenChannels?.let { put("showHiddenChannels", JsonPrimitive(it)) }
             }
             runCatching { apiCall { configApi.patch(body) } }
                 .onSuccess { updated ->
@@ -382,6 +384,9 @@ fun SettingsScreen(navController: NavHostController, vm: SettingsViewModel = hil
                         var checkHash by rememberSaveable(config.checkHash) {
                             mutableStateOf(config.checkHash ?: false)
                         }
+                        var showHidden by rememberSaveable(config.showHiddenChannels) {
+                            mutableStateOf(config.showHiddenChannels ?: false)
+                        }
 
                         OutlinedTextField(
                             value = maxDownloads,
@@ -411,6 +416,19 @@ fun SettingsScreen(navController: NavHostController, vm: SettingsViewModel = hil
                             Text("Calcular hash al subir", modifier = Modifier.weight(1f))
                             Switch(checked = checkHash, onCheckedChange = { checkHash = it })
                         }
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Mostrar canales ocultos")
+                                Text(
+                                    "Los canales que hayas ocultado vuelven a aparecer en " +
+                                        "todas las listas, aquí y en la web.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(checked = showHidden, onCheckedChange = { showHidden = it })
+                        }
                         Spacer(Modifier.height(12.dp))
                         Button(
                             onClick = {
@@ -418,7 +436,8 @@ fun SettingsScreen(navController: NavHostController, vm: SettingsViewModel = hil
                                     maxDownloads.toIntOrNull(),
                                     parallel.toIntOrNull(),
                                     connections.toIntOrNull(),
-                                    checkHash
+                                    checkHash,
+                                    showHidden
                                 )
                             },
                             enabled = !state.saving,

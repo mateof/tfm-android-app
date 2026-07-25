@@ -75,6 +75,7 @@ data class ChannelDto(
     val type: String? = null,
     val isOwner: Boolean = false,
     val isFavorite: Boolean = false,
+    val isHidden: Boolean = false,
     val imageUrl: String? = null,
     val hasDatabase: Boolean = false,
     // details-only fields
@@ -460,5 +461,6 @@ data class AppConfigDto(
     val parallelTransfers: Int? = null,
     val enableMultiConnectionDownloads: Boolean? = null,
     val downloadConnections: Int? = null,
-    val enableRefreshOwnChannels: Boolean? = null
+    val enableRefreshOwnChannels: Boolean? = null,
+    val showHiddenChannels: Boolean? = null
 )

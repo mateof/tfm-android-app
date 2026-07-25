@@ -14,6 +14,9 @@ through the server's REST API v1 + SignalR hub.
 - **Channels**: saved / all / favorites, search, details with statistics,
   create channel, join by invitation, create/refresh index, recent messages
   with direct attachment download, leave channel.
+- **Hidden channels**: hide a channel from every list, review them in the
+  "Ocultos" tab and bring them back. The server-wide *show hidden channels*
+  setting is toggled from the channel list (eye button) or from Settings.
 - **Re-index a channel** from the app, like the web does: pick which media
   types to fetch (video, audio, photos, documents), optionally force a full
   rescan instead of only the messages after the last indexed one. The scan
