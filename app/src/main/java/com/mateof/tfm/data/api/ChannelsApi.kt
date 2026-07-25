@@ -54,10 +54,10 @@ interface ChannelsApi {
     suspend fun create(@Body body: CreateChannelRequest): ApiEnvelope<ChannelDto>
 
     @POST("api/v1/channels/{id}/favorite")
-    suspend fun addFavorite(@Path("id") id: String): ApiEnvelope<Boolean>
+    suspend fun addFavorite(@Path("id") id: String): ApiEnvelope<Unit>
 
     @DELETE("api/v1/channels/{id}/favorite")
-    suspend fun removeFavorite(@Path("id") id: String): ApiEnvelope<Boolean>
+    suspend fun removeFavorite(@Path("id") id: String): ApiEnvelope<Unit>
 
     /** Hidden channels, listed regardless of the "show hidden" setting. */
     @GET("api/v1/channels/hidden")
@@ -70,13 +70,13 @@ interface ChannelsApi {
     suspend fun removeHidden(@Path("id") id: String): ApiEnvelope<Unit>
 
     @POST("api/v1/channels/{id}/database")
-    suspend fun createDatabase(@Path("id") id: String): ApiEnvelope<Boolean>
+    suspend fun createDatabase(@Path("id") id: String): ApiEnvelope<Unit>
 
     @DELETE("api/v1/channels/{id}/database")
-    suspend fun dropDatabase(@Path("id") id: String): ApiEnvelope<Boolean>
+    suspend fun dropDatabase(@Path("id") id: String): ApiEnvelope<Unit>
 
     @POST("api/v1/channels/{id}/leave")
-    suspend fun leave(@Path("id") id: String, @Body body: LeaveChannelRequest): ApiEnvelope<Boolean>
+    suspend fun leave(@Path("id") id: String, @Body body: LeaveChannelRequest): ApiEnvelope<Unit>
 
     // 202 Accepted with an empty payload: the scan runs in the background and
     // its state is polled through [isRefreshing].
@@ -97,8 +97,9 @@ interface ChannelsApi {
     @GET("api/v1/channels/{id}/invitation")
     suspend fun invitation(@Path("id") id: String): ApiEnvelope<InvitationDto>
 
+    // Joining answers with a message only, not with the joined channel.
     @POST("api/v1/channels/join")
-    suspend fun join(@Query("hash") hash: String): ApiEnvelope<ChannelDto>
+    suspend fun join(@Query("hash") hash: String): ApiEnvelope<Unit>
 }
 
 interface FilesApi {
@@ -170,11 +171,13 @@ interface FilesApi {
         @Body body: CopyMoveRequest
     ): ApiEnvelope<OperationResultDto>
 
+    // 202 Accepted: the bytes are staged server-side and the upload continues
+    // as a managed transfer, so there is no payload to read here.
     @Multipart
     @POST("api/v1/channels/{channelId}/files/upload")
     suspend fun upload(
         @Path("channelId") channelId: String,
         @Part file: MultipartBody.Part,
         @Part("path") path: RequestBody? = null
-    ): ApiEnvelope<OperationResultDto>
+    ): ApiEnvelope<Unit>
 }

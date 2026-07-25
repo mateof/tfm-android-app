@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.mateof.tfm.core.apiCall
+import com.mateof.tfm.core.apiCallNullable
 import com.mateof.tfm.core.userMessage
 import com.mateof.tfm.data.api.AuthApi
 import com.mateof.tfm.data.api.ConfigApi
@@ -193,7 +194,7 @@ class SettingsViewModel @Inject constructor(
     fun logout() {
         viewModelScope.launch {
             _state.value = _state.value.copy(saving = true)
-            runCatching { apiCall { authApi.logout() } }
+            runCatching { apiCallNullable { authApi.logout() } }
                 .onSuccess { _state.value = _state.value.copy(saving = false, loggedOut = true) }
                 .onFailure { e ->
                     _state.value = _state.value.copy(saving = false, snackbar = e.userMessage())

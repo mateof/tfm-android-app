@@ -339,8 +339,8 @@ class ChannelsViewModel @Inject constructor(
     fun toggleFavorite(channel: ChannelDto) {
         viewModelScope.launch {
             runCatching {
-                if (channel.isFavorite) apiCall { api.removeFavorite(channel.id.toString()) }
-                else apiCall { api.addFavorite(channel.id.toString()) }
+                if (channel.isFavorite) apiCallNullable { api.removeFavorite(channel.id.toString()) }
+                else apiCallNullable { api.addFavorite(channel.id.toString()) }
             }.onSuccess {
                 _state.value = _state.value.copy(
                     channels = _state.value.channels.map {
@@ -364,7 +364,7 @@ class ChannelsViewModel @Inject constructor(
             prefs.saveScanOptions(options)
             if (!channel.hasDatabase) {
                 // Ignore "already exists": we only want to guarantee the index.
-                runCatching { apiCall { api.createDatabase(channel.id.toString()) } }
+                runCatching { apiCallNullable { api.createDatabase(channel.id.toString()) } }
             }
             runCatching { apiCallNullable { api.refresh(channel.id.toString(), options) } }
                 .onSuccess {
@@ -410,7 +410,7 @@ class ChannelsViewModel @Inject constructor(
             .removePrefix("t.me/+")
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true)
-            runCatching { apiCall { api.join(clean) } }
+            runCatching { apiCallNullable { api.join(clean) } }
                 .onSuccess {
                     _state.value = _state.value.copy(busy = false, snackbar = "Unido al canal")
                     load()
@@ -425,7 +425,7 @@ class ChannelsViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true)
             runCatching {
-                apiCall {
+                apiCallNullable {
                     api.leave(
                         channel.id.toString(),
                         LeaveChannelRequest(deleteDb, deleteOnTelegram)
@@ -489,7 +489,7 @@ class ChannelsViewModel @Inject constructor(
     fun deleteShare(share: SharedCollectionDto) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true)
-            runCatching { apiCall { sharesApi.delete(share.id) } }
+            runCatching { apiCallNullable { sharesApi.delete(share.id) } }
                 .onSuccess {
                     _state.value = _state.value.copy(
                         busy = false,

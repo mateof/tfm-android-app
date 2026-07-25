@@ -47,6 +47,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.mateof.tfm.core.Format
 import com.mateof.tfm.core.apiCall
+import com.mateof.tfm.core.apiCallNullable
 import com.mateof.tfm.core.userMessage
 import com.mateof.tfm.data.api.TransfersApi
 import com.mateof.tfm.data.model.TransferDto
@@ -93,9 +94,9 @@ class TransfersViewModel @Inject constructor(
     fun resumeAll() = exec { apiCall { api.resumeDownloads() } }
     fun stopAll() = exec { apiCall { api.stopDownloads() } }
     fun clearFinished() = exec { apiCall { api.clear("all") } }
-    fun pause(t: TransferDto) { t.id?.let { id -> exec { apiCall { api.pause(id) } } } }
-    fun cancel(t: TransferDto) { t.id?.let { id -> exec { apiCall { api.cancel(id) } } } }
-    fun retry(t: TransferDto) { t.id?.let { id -> exec { apiCall { api.retry(id) } } } }
+    fun pause(t: TransferDto) { t.id?.let { id -> exec { apiCallNullable { api.pause(id) } } } }
+    fun cancel(t: TransferDto) { t.id?.let { id -> exec { apiCallNullable { api.cancel(id) } } } }
+    fun retry(t: TransferDto) { t.id?.let { id -> exec { apiCallNullable { api.retry(id) } } } }
 
     fun snackbarShown() {
         _snackbar.value = null

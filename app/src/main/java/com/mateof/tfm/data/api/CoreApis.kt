@@ -40,7 +40,7 @@ interface AuthApi {
     suspend fun me(): ApiEnvelope<TelegramUserDto>
 
     @POST("api/v1/auth/logout")
-    suspend fun logout(): ApiEnvelope<AuthStatusDto>
+    suspend fun logout(): ApiEnvelope<Unit>
 
     @POST("api/v1/auth/qr")
     suspend fun qrStart(@Query("logoutFirst") logoutFirst: Boolean = false): ApiEnvelope<QrSessionDto>
@@ -55,7 +55,7 @@ interface AuthApi {
     ): ApiEnvelope<QrSessionDto>
 
     @DELETE("api/v1/auth/qr/{sessionId}")
-    suspend fun qrCancel(@Path("sessionId") sessionId: String): ApiEnvelope<QrSessionDto>
+    suspend fun qrCancel(@Path("sessionId") sessionId: String): ApiEnvelope<Unit>
 }
 
 interface ConfigApi {

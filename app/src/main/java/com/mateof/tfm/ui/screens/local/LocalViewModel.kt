@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mateof.tfm.core.apiCall
+import com.mateof.tfm.core.apiCallNullable
 import com.mateof.tfm.core.apiCallPaged
 import com.mateof.tfm.core.userMessage
 import com.mateof.tfm.data.api.LocalApi
@@ -276,7 +277,7 @@ class LocalViewModel @Inject constructor(
     fun clearStreamCache() {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true)
-            runCatching { apiCall { localApi.clearCache() } }
+            runCatching { apiCallNullable { localApi.clearCache() } }
                 .onSuccess {
                     _state.value = _state.value.copy(busy = false)
                     notify("Caché de streaming vaciada")

@@ -20,7 +20,7 @@ interface SharesApi {
     ): ApiEnvelope<List<SharedCollectionDto>>
 
     @DELETE("api/v1/shares/{id}")
-    suspend fun delete(@Path("id") id: String): ApiEnvelope<Boolean>
+    suspend fun delete(@Path("id") id: String): ApiEnvelope<Unit>
 
     /**
      * Builds .strm files for a channel folder.

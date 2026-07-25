@@ -43,6 +43,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.mateof.tfm.core.Format
 import com.mateof.tfm.core.apiCall
+import com.mateof.tfm.core.apiCallNullable
 import com.mateof.tfm.core.userMessage
 import com.mateof.tfm.data.api.FilesApi
 import com.mateof.tfm.data.api.PlaylistsApi
@@ -177,7 +178,7 @@ class PlaylistDetailViewModel @Inject constructor(
 
     fun downloadToServer() {
         viewModelScope.launch {
-            runCatching { apiCall { api.download(id) } }
+            runCatching { apiCallNullable { api.download(id) } }
                 .onSuccess {
                     _state.value = _state.value.copy(
                         snackbar = "Descarga de la playlist encolada (ver Transfers)"

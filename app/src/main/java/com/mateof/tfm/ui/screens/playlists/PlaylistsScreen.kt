@@ -39,6 +39,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.mateof.tfm.core.Format
 import com.mateof.tfm.core.apiCall
+import com.mateof.tfm.core.apiCallNullable
 import com.mateof.tfm.core.userMessage
 import com.mateof.tfm.data.api.PlaylistsApi
 import com.mateof.tfm.data.model.CreatePlaylistRequest
@@ -95,7 +96,7 @@ class PlaylistsViewModel @Inject constructor(
 
     fun delete(playlist: PlaylistDto) {
         viewModelScope.launch {
-            runCatching { apiCall { api.delete(playlist.id) } }
+            runCatching { apiCallNullable { api.delete(playlist.id) } }
                 .onSuccess { load() }
                 .onFailure { e -> _state.value = _state.value.copy(snackbar = e.userMessage()) }
         }

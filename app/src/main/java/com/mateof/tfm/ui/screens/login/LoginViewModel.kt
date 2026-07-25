@@ -3,6 +3,7 @@ package com.mateof.tfm.ui.screens.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mateof.tfm.core.apiCall
+import com.mateof.tfm.core.apiCallNullable
 import com.mateof.tfm.core.userMessage
 import com.mateof.tfm.data.api.AuthApi
 import com.mateof.tfm.data.model.LoginRequest
@@ -124,7 +125,7 @@ class LoginViewModel @Inject constructor(
         pollJob?.cancel()
         if (id != null) {
             viewModelScope.launch {
-                runCatching { apiCall { authApi.qrCancel(id) } }
+                runCatching { apiCallNullable { authApi.qrCancel(id) } }
             }
         }
     }

@@ -210,7 +210,7 @@ class FilesViewModel @Inject constructor(
             prefs.saveScanOptions(options)
             if (creating) {
                 // Ignore "already exists" — we just want to guarantee the index.
-                runCatching { apiCall { channelsApi.createDatabase(channelId) } }
+                runCatching { apiCallNullable { channelsApi.createDatabase(channelId) } }
             }
             runCatching { apiCallNullable { channelsApi.refresh(channelId, options) } }
                 .onSuccess {
@@ -451,7 +451,7 @@ class FilesViewModel @Inject constructor(
                     val picked = Uploads.describe(appContext, uri)
                     val part = Uploads.filePart(appContext, picked)
                     val pathBody = currentPath.toRequestBody("text/plain".toMediaType())
-                    apiCall { filesApi.upload(channelId, part, pathBody) }
+                    apiCallNullable { filesApi.upload(channelId, part, pathBody) }
                 }.onSuccess {
                     notify("Subida al servidor completada; enviando a Telegram (ver Transfers)")
                 }.onFailure { e ->

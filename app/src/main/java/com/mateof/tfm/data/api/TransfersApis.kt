@@ -65,19 +65,22 @@ interface TransfersApi {
     suspend fun stopDownloads(): ApiEnvelope<TransferSummaryDto>
 
     @POST("api/v1/transfers/{id}/pause")
-    suspend fun pause(@Path("id") id: String): ApiEnvelope<Boolean>
+    suspend fun pause(@Path("id") id: String): ApiEnvelope<Unit>
 
     @POST("api/v1/transfers/{id}/cancel")
-    suspend fun cancel(@Path("id") id: String): ApiEnvelope<Boolean>
+    suspend fun cancel(@Path("id") id: String): ApiEnvelope<Unit>
 
     @POST("api/v1/transfers/{id}/retry")
-    suspend fun retry(@Path("id") id: String): ApiEnvelope<Boolean>
+    suspend fun retry(@Path("id") id: String): ApiEnvelope<Unit>
 
+    // Both clear endpoints answer with the snapshot left after the cleanup.
     @POST("api/v1/transfers/clear")
-    suspend fun clear(@Query("scope") scope: String = "all"): ApiEnvelope<Boolean>
+    suspend fun clear(@Query("scope") scope: String = "all"): ApiEnvelope<TransfersSnapshotDto>
 
     @POST("api/v1/transfers/queue/clear")
-    suspend fun clearQueue(@Query("scope") scope: String = "all"): ApiEnvelope<Boolean>
+    suspend fun clearQueue(
+        @Query("scope") scope: String = "all"
+    ): ApiEnvelope<TransfersSnapshotDto>
 
     @GET("api/v1/transfers/persisted")
     suspend fun persisted(
@@ -86,10 +89,10 @@ interface TransfersApi {
     ): ApiEnvelope<List<PersistedTransferDto>>
 
     @DELETE("api/v1/transfers/persisted/{internalId}")
-    suspend fun deletePersisted(@Path("internalId") internalId: String): ApiEnvelope<Boolean>
+    suspend fun deletePersisted(@Path("internalId") internalId: String): ApiEnvelope<Unit>
 
     @DELETE("api/v1/transfers/persisted")
-    suspend fun deleteAllPersisted(): ApiEnvelope<Boolean>
+    suspend fun deleteAllPersisted(): ApiEnvelope<Unit>
 }
 
 interface LocalApi {
@@ -129,7 +132,7 @@ interface LocalApi {
     ): ApiEnvelope<ApiFileDto>
 
     @POST("api/v1/local/cache/clear")
-    suspend fun clearCache(): ApiEnvelope<Boolean>
+    suspend fun clearCache(): ApiEnvelope<Unit>
 }
 
 interface PlaylistsApi {
@@ -152,7 +155,7 @@ interface PlaylistsApi {
     suspend fun update(@Path("id") id: String, @Body body: UpdatePlaylistRequest): ApiEnvelope<PlaylistDto>
 
     @DELETE("api/v1/playlists/{id}")
-    suspend fun delete(@Path("id") id: String): ApiEnvelope<Boolean>
+    suspend fun delete(@Path("id") id: String): ApiEnvelope<Unit>
 
     @POST("api/v1/playlists/{id}/tracks")
     suspend fun addTrack(@Path("id") id: String, @Body body: AddTrackRequest): ApiEnvelope<PlaylistDto>
@@ -163,9 +166,10 @@ interface PlaylistsApi {
     @PUT("api/v1/playlists/{id}/tracks/order")
     suspend fun reorder(@Path("id") id: String, @Body order: List<String>): ApiEnvelope<PlaylistDto>
 
+    // 202 Accepted: the whole playlist is queued as a background transfer.
     @POST("api/v1/playlists/{id}/download")
     suspend fun download(
         @Path("id") id: String,
         @Query("destinationFolder") destinationFolder: String? = null
-    ): ApiEnvelope<OperationResultDto>
+    ): ApiEnvelope<Unit>
 }
