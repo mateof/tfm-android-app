@@ -1,5 +1,15 @@
 # TFM Android
 
+<p align="center">
+  <a href="https://github.com/mateof/tfm-android-app/actions/workflows/release.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/mateof/tfm-android-app/release.yml?branch=main&amp;label=CI&amp;logo=github"></a>
+  <a href="https://github.com/mateof/tfm-android-app/releases/latest"><img alt="Version" src="https://img.shields.io/github/v/release/mateof/tfm-android-app?label=version&amp;color=blue"></a>
+  <a href="https://github.com/mateof/tfm-android-app/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/mateof/tfm-android-app/total?label=downloads&amp;color=success"></a>
+  <a href="https://developer.android.com/"><img alt="Android" src="https://img.shields.io/badge/platform-Android-3DDC84?logo=android&amp;logoColor=white"></a>
+  <a href="https://kotlinlang.org/"><img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Compose-7F52FF?logo=kotlin&amp;logoColor=white"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/mateof/tfm-android-app"></a>
+  <a href="https://github.com/mateof/tfm-android-app/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/mateof/tfm-android-app"></a>
+</p>
+
 Android client (Kotlin + Jetpack Compose, Material 3) for
 **TelegramFileManager**: manage the files you store in Telegram channels
 through the server's REST API v1 + SignalR hub.
